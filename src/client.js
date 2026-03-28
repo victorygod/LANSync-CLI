@@ -112,7 +112,7 @@ export async function uploadFile(serverUrl, filePath, content) {
   const res = await fetchWithTimeout(url, {
     method: 'POST',
     headers: {
-      'X-Path': filePath
+      'X-Path': encodeURIComponent(filePath)
     },
     body: content
   });

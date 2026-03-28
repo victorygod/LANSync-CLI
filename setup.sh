@@ -39,35 +39,40 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Check if running from git repo or need to clone
 if [ -f "$SCRIPT_DIR/package.json" ]; then
-    # Running from source directory
+    # Running from source directory - copy to install location first
     echo "Installing from source directory..."
     SOURCE_DIR="$SCRIPT_DIR"
 else
     # Clone from GitHub
     echo "Cloning lansync from GitHub..."
-    if [ -d "$INSTALL_DIR" ]; then
-        echo "Removing existing installation..."
-        rm -rf "$INSTALL_DIR"
-    fi
-    git clone "$REPO_URL" "$INSTALL_DIR"
     SOURCE_DIR="$INSTALL_DIR"
 fi
 
-# Install dependencies
-echo "Installing dependencies..."
-cd "$SOURCE_DIR"
-npm install --silent
+# Always install to ~/.lansync for consistency
+if [ -d "$INSTALL_DIR" ]; then
+    echo "Removing existing installation..."
+    rm -rf "$INSTALL_DIR"
+fi
 
-# Link globally
-echo "Linking command..."
-npm link --silent
-
-# If not already installed to ~/.lansync, copy there for persistence
-if [ "$SOURCE_DIR" != "$INSTALL_DIR" ]; then
-    echo "Copying to $INSTALL_DIR for persistence..."
+# Copy files to install directory
+if [ "$SOURCE_DIR" = "$INSTALL_DIR" ]; then
+    # Cloning case
+    git clone "$REPO_URL" "$INSTALL_DIR"
+else
+    # Copy from source directory
+    echo "Copying to $INSTALL_DIR..."
     mkdir -p "$INSTALL_DIR"
     cp -r "$SOURCE_DIR"/* "$INSTALL_DIR/"
 fi
+
+# Install dependencies in the install directory
+echo "Installing dependencies..."
+cd "$INSTALL_DIR"
+npm install --silent
+
+# Link globally from the install directory
+echo "Linking command..."
+npm link --silent
 
 echo ""
 echo "=== Setup Complete ==="

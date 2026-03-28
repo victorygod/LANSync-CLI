@@ -20,6 +20,12 @@ A minimal LAN file sync tool.
 ### Quick Install (macOS / Linux)
 
 ```bash
+curl -fsSL https://raw.githubusercontent.com/wolf4ood/lansync/main/setup.sh | bash
+```
+
+Or clone and install:
+
+```bash
 git clone https://github.com/wolf4ood/lansync.git
 cd lansync
 ./setup.sh

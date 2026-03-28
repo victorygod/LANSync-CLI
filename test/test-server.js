@@ -233,6 +233,17 @@ describe('HTTP server', () => {
       assert.strictEqual(res.status, 200);
       assert.ok(fs.existsSync(path.join(tmpDir, 'deep', 'nested', 'file.txt')));
     });
+
+    it('handles unicode file paths', async () => {
+      const res = await fetch(`http://localhost:${port}/api/file`, {
+        method: 'POST',
+        headers: { 'X-Path': encodeURIComponent('中文目录/文件.txt') },
+        body: 'unicode content'
+      });
+      assert.strictEqual(res.status, 200);
+      assert.ok(fs.existsSync(path.join(tmpDir, '中文目录', '文件.txt')));
+      assert.strictEqual(fs.readFileSync(path.join(tmpDir, '中文目录', '文件.txt'), 'utf-8'), 'unicode content');
+    });
   });
 
   describe('DELETE /api/file', () => {

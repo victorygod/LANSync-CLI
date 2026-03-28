@@ -263,7 +263,8 @@ async function handleFileGet(url, rootDir, res) {
 }
 
 async function handleFilePost(req, rootDir, res) {
-  const filePath = req.headers['x-path'];
+  const encodedPath = req.headers['x-path'];
+  const filePath = encodedPath ? decodeURIComponent(encodedPath) : null;
   if (!filePath) {
     res.writeHead(400, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Missing X-Path header' }));
