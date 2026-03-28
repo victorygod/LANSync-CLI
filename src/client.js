@@ -218,22 +218,38 @@ export function scanLocalFiles(dir, ignoreRules) {
 }
 
 function shouldIgnore(filepath, rules) {
+  let ignored = false;
   for (const rule of rules) {
-    if (rule.endsWith('/')) {
-      const dirRule = rule.slice(0, -1);
-      if (filepath === dirRule || filepath.startsWith(dirRule + '/') || filepath.startsWith(dirRule + '\\')) {
-        return true;
+    // Handle negation rules (starting with !)
+    if (rule.startsWith('!')) {
+      const negPattern = rule.slice(1);
+      if (matchesPattern(filepath, negPattern)) {
+        ignored = false;  // Un-ignore the file
       }
-      if (minimatch(filepath, rule + '**', { dot: true })) {
-        return true;
-      }
+      continue;
     }
-    if (minimatch(filepath, rule, { dot: true })) {
+    if (matchesPattern(filepath, rule)) {
+      ignored = true;
+    }
+  }
+  return ignored;
+}
+
+function matchesPattern(filepath, pattern) {
+  if (pattern.endsWith('/')) {
+    const dirRule = pattern.slice(0, -1);
+    if (filepath === dirRule || filepath.startsWith(dirRule + '/') || filepath.startsWith(dirRule + '\\')) {
       return true;
     }
-    if (minimatch(filepath, '**/' + rule, { dot: true })) {
+    if (minimatch(filepath, pattern + '**', { dot: true })) {
       return true;
     }
+  }
+  if (minimatch(filepath, pattern, { dot: true })) {
+    return true;
+  }
+  if (minimatch(filepath, '**/' + pattern, { dot: true })) {
+    return true;
   }
   return false;
 }
@@ -403,7 +419,7 @@ export async function pull({ serverUrl, workDir, currentDir, pattern, noDelete }
         relativePath = f.path.slice(prefixWithBackslash.length);
       }
     }
-    return { ...f, path: relativePath, serverPath: f.path };
+    return { ...f, path: relativePath, serverPath: normalizePath(f.path) };
   });
 
   // Filter by pattern if provided
@@ -483,10 +499,10 @@ export async function push({ serverUrl, workDir, currentDir, pattern, noDelete }
   // Scan local files (paths are relative to currentDir)
   let localFiles = scanLocalFiles(currentDir, ignoreRules);
 
-  // Add serverPath to local files for upload
+  // Add serverPath to local files for upload (normalize to forward slashes)
   localFiles = localFiles.map(f => ({
     ...f,
-    serverPath: pathPrefix ? `${pathPrefix}/${f.path}` : f.path
+    serverPath: pathPrefix ? normalizePath(`${pathPrefix}/${f.path}`) : normalizePath(f.path)
   }));
 
   // Filter by pattern if provided
@@ -509,7 +525,7 @@ export async function push({ serverUrl, workDir, currentDir, pattern, noDelete }
         relativePath = f.path.slice(prefixWithBackslash.length);
       }
     }
-    return { ...f, path: relativePath, serverPath: f.path };
+    return { ...f, path: relativePath, serverPath: normalizePath(f.path) };
   });
 
   // Filter server files by the same pattern to prevent deleting files outside pattern

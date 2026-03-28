@@ -12,6 +12,11 @@ import { readServerConfig, writeServerConfig, getConfigDir } from './config.js';
 const DEFAULT_PORT = 8001;
 const LOG_FILE = path.join(getConfigDir(), 'server.log');
 
+// Normalize path separators to forward slashes for cross-platform compatibility
+function normalizePath(p) {
+  return p.replace(/\\/g, '/');
+}
+
 // Simple logger that writes to file
 function log(message) {
   const timestamp = new Date().toISOString();
@@ -44,35 +49,51 @@ export function parseGitignore(content) {
 }
 
 export function shouldIgnore(filepath, rules) {
+  let ignored = false;
   for (const rule of rules) {
-    // Handle directory patterns (ending with /)
-    if (rule.endsWith('/')) {
-      const dirRule = rule.slice(0, -1);
-      // Match directory itself or anything inside
-      if (filepath === dirRule || filepath.startsWith(dirRule + '/') || filepath.startsWith(dirRule + '\\')) {
-        return true;
+    // Handle negation rules (starting with !)
+    if (rule.startsWith('!')) {
+      const negPattern = rule.slice(1);
+      if (matchesPattern(filepath, negPattern)) {
+        ignored = false;  // Un-ignore the file
       }
-      // Also match with minimatch for glob patterns like dist/
-      if (minimatch(filepath, rule + '**', { dot: true })) {
-        return true;
-      }
+      continue;
     }
-    // Direct match
-    if (minimatch(filepath, rule, { dot: true })) {
+    if (matchesPattern(filepath, rule)) {
+      ignored = true;
+    }
+  }
+  return ignored;
+}
+
+function matchesPattern(filepath, pattern) {
+  // Handle directory patterns (ending with /)
+  if (pattern.endsWith('/')) {
+    const dirRule = pattern.slice(0, -1);
+    // Match directory itself or anything inside
+    if (filepath === dirRule || filepath.startsWith(dirRule + '/') || filepath.startsWith(dirRule + '\\')) {
       return true;
     }
-    // Match file inside a directory pattern (for bare names like node_modules)
-    if (filepath === rule || filepath.startsWith(rule + '/') || filepath.startsWith(rule + '\\')) {
+    // Also match with minimatch for glob patterns like dist/
+    if (minimatch(filepath, pattern + '**', { dot: true })) {
       return true;
     }
-    // Match directory anywhere in the path
-    if (filepath.includes('/' + rule + '/') || filepath.includes('\\' + rule + '\\')) {
-      return true;
-    }
-    // Match with ** prefix for glob patterns
-    if (minimatch(filepath, '**/' + rule, { dot: true })) {
-      return true;
-    }
+  }
+  // Direct match
+  if (minimatch(filepath, pattern, { dot: true })) {
+    return true;
+  }
+  // Match file inside a directory pattern (for bare names like node_modules)
+  if (filepath === pattern || filepath.startsWith(pattern + '/') || filepath.startsWith(pattern + '\\')) {
+    return true;
+  }
+  // Match directory anywhere in the path
+  if (filepath.includes('/' + pattern + '/') || filepath.includes('\\' + pattern + '\\')) {
+    return true;
+  }
+  // Match with ** prefix for glob patterns
+  if (minimatch(filepath, '**/' + pattern, { dot: true })) {
+    return true;
   }
   return false;
 }
@@ -264,7 +285,8 @@ async function handleFileGet(url, rootDir, res) {
 
 async function handleFilePost(req, rootDir, res) {
   const encodedPath = req.headers['x-path'];
-  const filePath = encodedPath ? decodeURIComponent(encodedPath) : null;
+  // Decode and normalize path separators for cross-platform compatibility
+  const filePath = encodedPath ? normalizePath(decodeURIComponent(encodedPath)) : null;
   if (!filePath) {
     res.writeHead(400, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Missing X-Path header' }));

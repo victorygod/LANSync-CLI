@@ -111,6 +111,14 @@ describe('ignore rules', () => {
       assert.ok(!shouldIgnore('src/index.js', rules));
       assert.ok(!shouldIgnore('package.json', rules));
     });
+
+    it('handles negation rules', () => {
+      const rulesWithNegation = ['local-data/*.json', '!local-data/.gitkeep', '*.log'];
+      assert.ok(shouldIgnore('local-data/test.json', rulesWithNegation));
+      assert.ok(!shouldIgnore('local-data/.gitkeep', rulesWithNegation));  // negated
+      assert.ok(shouldIgnore('debug.log', rulesWithNegation));
+      assert.ok(!shouldIgnore('src/index.js', rulesWithNegation));  // should not ignore
+    });
   });
 });
 
@@ -243,6 +251,18 @@ describe('HTTP server', () => {
       assert.strictEqual(res.status, 200);
       assert.ok(fs.existsSync(path.join(tmpDir, '中文目录', '文件.txt')));
       assert.strictEqual(fs.readFileSync(path.join(tmpDir, '中文目录', '文件.txt'), 'utf-8'), 'unicode content');
+    });
+
+    it('handles Windows-style backslash paths', async () => {
+      const res = await fetch(`http://localhost:${port}/api/file`, {
+        method: 'POST',
+        headers: { 'X-Path': encodeURIComponent('test\\subdir\\winfile.txt') },
+        body: 'windows path'
+      });
+      assert.strictEqual(res.status, 200);
+      // Should create proper nested directory, not a file with backslash in name
+      assert.ok(fs.existsSync(path.join(tmpDir, 'test', 'subdir', 'winfile.txt')));
+      assert.strictEqual(fs.readFileSync(path.join(tmpDir, 'test', 'subdir', 'winfile.txt'), 'utf-8'), 'windows path');
     });
   });
 
