@@ -2,7 +2,9 @@
 import process from 'node:process';
 import path from 'node:path';
 import os from 'node:os';
+import fs from 'node:fs';
 import readline from 'node:readline';
+import { fileURLToPath } from 'node:url';
 import { Writable } from 'node:stream';
 import { startServerDaemon, stopServerDaemon, getServerStatus, enableCli, disableCli } from './server.js';
 import { pull, push, checkServerReachable, execRemote } from './client.js';
@@ -10,6 +12,15 @@ import { readClientConfig, writeClientConfig } from './config.js';
 import { deriveToken } from './policy.js';
 
 const args = process.argv.slice(2);
+
+// 版本号单一来源:package.json。start/config/status 都打印,
+// 用于一眼确认对端机器部署的是哪个版本的代码。
+let VERSION = 'unknown';
+try {
+  VERSION = JSON.parse(
+    fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'package.json'), 'utf-8')
+  ).version;
+} catch {}
 
 async function main() {
   if (args.length === 0) {
@@ -38,7 +49,7 @@ async function main() {
         break;
       case '--version':
       case '-v':
-        console.log('lansyncopt v1.0.0');
+        console.log(`lansyncopt v${VERSION}`);
         break;
       case '--help':
       case '-h':
@@ -93,6 +104,7 @@ async function handleServerCommand(subArgs) {
         : undefined;
       const result = await startServerDaemon(rootDir, port);
       console.log('Server started successfully.');
+      console.log(`  Version: ${VERSION}`);
       console.log(`  URL: http://${result.ip}:${result.port}`);
       console.log(`  Root: ${result.rootDir}`);
       console.log(`  PID: ${result.pid}`);
@@ -110,6 +122,7 @@ async function handleServerCommand(subArgs) {
     case 'status': {
       const status = getServerStatus();
       console.log(`Server status: ${status.status}`);
+      console.log(`  Version: ${VERSION}`);
       if (status.status === 'running') {
         console.log(`  URL: ${status.url}`);
         console.log(`  Root: ${status.rootDir}`);
@@ -165,6 +178,7 @@ async function handleClientCommand(subArgs) {
       writeClientConfig({ serverUrl, workDir });
       console.log(`Configured server: ${serverUrl}`);
       console.log(`Working directory: ${workDir}`);
+      console.log(`Version: ${VERSION}`);
       break;
     }
     case 'status': {

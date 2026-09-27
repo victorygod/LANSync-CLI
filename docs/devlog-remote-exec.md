@@ -71,6 +71,19 @@
 
 `test-server.js` 的路径遍历用例会触发 server 的 `log()`,在 `~/.lansyncopt` 留下 `server.log`。修复:`log()` 改为惰性取路径,`test-server.js` 顶部设置 `LANSNC_CONFIG_DIR` 到临时目录,并清理了已写入的文件。
 
+### Windows 实战:外部 exe 的输出被"隐形控制台"吞掉(与上一个问题同源但更深)
+
+文件捕获上线后,真机(Windows 10 19045)上仍复现:cmd **内建命令**(`echo`/`ver`/`dir`/`type`)输出可达,但 cmd 拉起的**任何外部 exe**(`node`/`where`/`cat`)stdout/stderr 全空,退出码正常。排查过程中收集到的铁证:
+
+- 让 node 自报家门:运行的节点里 `process.stdout.isTTY === true`、`fd1 = chardev size=0` —— 子进程的 stdout 是一个**新分配的隐形控制台**,不是我们传入的捕获句柄;`stdwrite=OK` 说明输出"写成功了",只是写进了没人看的控制台
+- `node script > file 2>&1`(cmd 显式重定向)同样捕不到内容 —— 重定向句柄也没传下去
+- 子进程用 `fs.writeFileSync` 直接写文件**成功** —— 排除文件系统/权限因素
+- 退出码始终正确传播 —— 排除进程没跑起来
+
+根因判断:`spawn(..., {detached: true, windowsHide: true})` 在 Windows 上产生无控制台的 cmd,其控制台类子进程不再继承句柄而是各自抓到新控制台。
+
+修复:Windows 下去掉 `detached`(POSIX 不变),断连杀进程改用 `taskkill /PID <pid> /T /F` 树杀(`killExecTree` 平台分支),断连即杀能力不受损。另注意:`type`、`dir`、`echo` 等内建命令的输出通道始终正常,可作为该类环境下的兜底手段。
+
 ### Windows 下 daemon 静默死亡 + `server start` 假装成功
 
 实测跨机器使用时发现(Windows 服务端):daemon 路径用 `new URL(import.meta.url).pathname` 构造,在 Windows 得到 `/C:/...` 形式,spawn 出的子进程立即报 "Cannot find module" 死掉;而旧代码固定 sleep 500ms 后照常打印 "Server started successfully"。属于双重故障:启动失败 + 成功假象。

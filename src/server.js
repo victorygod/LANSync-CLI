@@ -232,12 +232,20 @@ function readJsonBody(req) {
   });
 }
 
-// 杀整个进程组(负号 PID),防止 shell 子进程变孤儿继续跑
-function killProcessGroup(child) {
-  try { process.kill(-child.pid, 'SIGTERM'); } catch {}
-  setTimeout(() => {
-    try { process.kill(-child.pid, 'SIGKILL'); } catch {}
-  }, 2000);
+// 杀掉 exec 的整棵进程树,防止断连后残留孤儿进程继续跑。
+// - POSIX:spawn 用 detached 建独立进程组,负号 PID 杀整组(SIGTERM → 2s 后 SIGKILL)
+// - Windows:不能 detached。实测在 detached(无控制台)环境下,cmd 拉起的外部 exe
+//   会被绑到新的隐形控制台,stdout/stderr 句柄全部失效、输出凭空丢失;
+//   去掉 detached 后句柄继承恢复正常。杀进程改用 taskkill /T(树杀)。
+function killExecTree(child) {
+  if (process.platform === 'win32') {
+    spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true });
+  } else {
+    try { process.kill(-child.pid, 'SIGTERM'); } catch {}
+    setTimeout(() => {
+      try { process.kill(-child.pid, 'SIGKILL'); } catch {}
+    }, 2000);
+  }
 }
 
 async function handleExec(req, res, rootDir) {
@@ -328,7 +336,8 @@ async function handleExec(req, res, rootDir) {
   activeExecs++;
   const child = spawn(command, {
     shell: true,
-    detached: true,
+    // POSIX 用独立进程组支持断连杀组;Windows 不用 detached(见 killExecTree 注释)
+    detached: process.platform !== 'win32',
     cwd: execCwd,
     stdio: ['ignore', outFd, errFd]
   });
@@ -360,9 +369,9 @@ async function handleExec(req, res, rootDir) {
     try { fs.rmSync(execTmpDir, { recursive: true, force: true }); } catch {}
   });
 
-  // 断连即杀:client 在命令结束前断开(agent 超时/网络断开)→ 杀整个进程组
+  // 断连即杀:client 在命令结束前断开(agent 超时/网络断开)→ 杀整棵进程树
   const abort = () => {
-    if (!settled) killProcessGroup(child);
+    if (!settled) killExecTree(child);
   };
   req.on('aborted', abort);
   res.on('close', abort);
