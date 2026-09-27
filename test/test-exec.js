@@ -4,7 +4,8 @@ import assert from 'node:assert';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { createServer, enableCli } from '../src/server.js';
+import { createServer } from '../src/server.js';
+import { writeServerConfig, readServerConfig } from '../src/config.js';
 import { deriveToken } from '../src/policy.js';
 
 const PASSWORD = 'test-password';
@@ -39,12 +40,18 @@ describe('/api/exec', () => {
     process.env.LANSNC_CONFIG_DIR = configDir;
 
     token = deriveToken(PASSWORD);
-    enableCli(PASSWORD, 'block-black');
+    writeServerConfig({ pid: process.pid, port: 0, rootDir, ip: '127.0.0.1', token, policy: 'exec-block-black' });
 
     server = createServer(rootDir);
     await new Promise(resolve => server.listen(0, resolve));
     port = server.address().port;
   });
+
+  function setPolicy(policy) {
+    const config = readServerConfig();
+    config.policy = policy;
+    writeServerConfig(config);
+  }
 
   afterEach(async () => {
     await new Promise(resolve => server.close(resolve));
@@ -78,6 +85,20 @@ describe('/api/exec', () => {
     assert.strictEqual(res.status, 401);
   });
 
+  it('rejects everything under exec-forbidden (403)', async () => {
+    setPolicy('exec-forbidden');
+    const res = await exec('echo hi');
+    assert.strictEqual(res.status, 403);
+    const data = await res.json();
+    assert.ok(data.error.includes('exec-forbidden'));
+  });
+
+  it('runs any command under exec-all-allow', async () => {
+    setPolicy('exec-all-allow');
+    const res = await exec('docker system prune');
+    assert.strictEqual(res.status, 200);
+  });
+
   it('runs a whitelist command and returns output', async () => {
     const res = await exec('echo hello-world');
     assert.strictEqual(res.status, 200);
@@ -96,13 +117,30 @@ describe('/api/exec', () => {
     assert.strictEqual(res.status, 403);
   });
 
-  it('gray command allowed in block-black, blocked in block-black-gray', async () => {
+  it('gray command allowed in exec-block-black, blocked in exec-block-black-gray', async () => {
     const res1 = await exec('docker system prune');
     assert.strictEqual(res1.status, 200);
 
-    enableCli(PASSWORD, 'block-black-gray');
+    setPolicy('exec-block-black-gray');
     const res2 = await exec('docker system prune');
     assert.strictEqual(res2.status, 403);
+  });
+
+  it('/api/auth accepts matching token and returns policy', async () => {
+    const res = await fetch(`http://localhost:${port}/api/auth`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    assert.strictEqual(res.status, 200);
+    const data = await res.json();
+    assert.strictEqual(data.ok, true);
+    assert.strictEqual(data.policy, 'exec-block-black');
+  });
+
+  it('/api/auth rejects wrong token (401)', async () => {
+    const res = await fetch(`http://localhost:${port}/api/auth`, {
+      headers: { 'Authorization': 'Bearer wrong-token' }
+    });
+    assert.strictEqual(res.status, 401);
   });
 
   it('enforces concurrency limit (429)', async () => {

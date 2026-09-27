@@ -6,10 +6,10 @@ import fs from 'node:fs';
 import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { Writable } from 'node:stream';
-import { startServerDaemon, stopServerDaemon, getServerStatus, enableCli, disableCli } from './server.js';
-import { pull, push, checkServerReachable, execRemote } from './client.js';
+import { startServerDaemon, stopServerDaemon, getServerStatus } from './server.js';
+import { pull, push, checkServerReachable, verifyAuth, execRemote } from './client.js';
 import { readClientConfig, writeClientConfig } from './config.js';
-import { deriveToken } from './policy.js';
+import { deriveToken, EXEC_POLICIES, DEFAULT_POLICY } from './policy.js';
 
 const args = process.argv.slice(2);
 
@@ -71,22 +71,21 @@ function printHelp() {
 lansyncopt - LAN file sync tool (remote-exec)
 
 Usage:
-  lansyncopt server start [--port <n>]  Start server daemon
+  lansyncopt server start [--port <n>] [--policy <m>]  Start server daemon (prompts for password)
   lansyncopt server stop                Stop server daemon
   lansyncopt server status              Show server status
-  lansyncopt server enable-cli --policy <mode>  Enable remote exec (password + policy)
-  lansyncopt server disable-cli         Disable remote exec
-  lansyncopt client config <ip:port>    Configure server address
+  lansyncopt client config <ip:port>    Configure server address + password (verified against server)
   lansyncopt client status              Show client config
-  lansyncopt client enable-cli          Enable remote exec on client (same password)
-  lansyncopt client disable-cli         Disable remote exec on client
   lansyncopt pull [pattern] [--no-delete]  Pull files from server
   lansyncopt push [pattern] [--no-delete]  Push files to server
   lansyncopt exec [--json] "<command>"  Execute remote command
 
+All requests are authenticated with the password (Bearer token). The password is
+set on the server at start and must match on the client at config time.
+
 Options:
   --no-delete    Don't delete files not present on source
-  --policy <m>   allow-all | block-black | block-black-gray (default block-black)
+  --policy <m>   exec-forbidden (default) | exec-all-allow | exec-block-black | exec-block-black-gray
   --version, -v  Show version
   --help, -h     Show this help
 `);
@@ -102,12 +101,28 @@ async function handleServerCommand(subArgs) {
       const port = portArgIndex !== -1 && subArgs[portArgIndex + 1]
         ? parseInt(subArgs[portArgIndex + 1], 10)
         : undefined;
-      const result = await startServerDaemon(rootDir, port);
+      const policyArgIndex = subArgs.indexOf('--policy');
+      const policy = policyArgIndex !== -1 && subArgs[policyArgIndex + 1]
+        ? subArgs[policyArgIndex + 1]
+        : DEFAULT_POLICY;
+      if (!EXEC_POLICIES.includes(policy)) {
+        console.error(`Invalid policy: ${policy}. Valid: ${EXEC_POLICIES.join(', ')}`);
+        process.exit(1);
+      }
+      // 密码始终必填:所有 /api/*(含 pull/push)都要求 token
+      const password = await promptPassword('Enter cli password: ');
+      if (!password) {
+        console.error('Password is required (set LANSNC_PASSWORD or enter interactively).');
+        process.exit(1);
+      }
+      const token = deriveToken(password);
+      const result = await startServerDaemon(rootDir, port, token, policy);
       console.log('Server started successfully.');
       console.log(`  Version: ${VERSION}`);
       console.log(`  URL: http://${result.ip}:${result.port}`);
       console.log(`  Root: ${result.rootDir}`);
       console.log(`  PID: ${result.pid}`);
+      console.log(`  Exec: ${policy}`);
       break;
     }
     case 'stop': {
@@ -127,32 +142,8 @@ async function handleServerCommand(subArgs) {
         console.log(`  URL: ${status.url}`);
         console.log(`  Root: ${status.rootDir}`);
         console.log(`  PID: ${status.pid}`);
-        console.log(`  CLI: ${status.cliEnabled ? `enabled (policy=${status.policy})` : 'disabled'}`);
+        console.log(`  Exec: ${status.policy}`);
       }
-      break;
-    }
-    case 'enable-cli': {
-      const policyArgIndex = subArgs.indexOf('--policy');
-      const policy = policyArgIndex !== -1 && subArgs[policyArgIndex + 1]
-        ? subArgs[policyArgIndex + 1]
-        : 'block-black';
-      const validPolicies = ['allow-all', 'block-black', 'block-black-gray'];
-      if (!validPolicies.includes(policy)) {
-        console.error(`Invalid policy: ${policy}. Valid: ${validPolicies.join(', ')}`);
-        process.exit(1);
-      }
-      const password = await promptPassword('Enter cli password: ');
-      if (!password) {
-        console.error('Password is required (set LANSNC_PASSWORD or enter interactively).');
-        process.exit(1);
-      }
-      enableCli(password, policy);
-      console.log(`CLI enabled. policy=${policy}`);
-      break;
-    }
-    case 'disable-cli': {
-      const disabled = disableCli();
-      console.log(disabled ? 'CLI disabled.' : 'CLI was not enabled.');
       break;
     }
     default:
@@ -172,11 +163,34 @@ async function handleClientCommand(subArgs) {
         process.exit(1);
       }
 
-      const serverUrl = serverAddr.startsWith('http') ? serverAddr : `http://${serverAddr}`;
+      // 地址基本校验:拦住 192.168.71,239(逗号当点)这类手滑,顺便归一化成 origin
+      let url;
+      try {
+        url = new URL(serverAddr.startsWith('http') ? serverAddr : `http://${serverAddr}`);
+      } catch {
+        console.error(`Invalid server address: ${serverAddr}`);
+        process.exit(1);
+      }
+      if (!url.hostname || url.hostname.includes(',') || url.hostname.includes(' ')) {
+        console.error(`Invalid server address: ${serverAddr} (hostname: "${url.hostname}")`);
+        process.exit(1);
+      }
+      const serverUrl = url.origin;
       const workDir = process.cwd();
 
-      writeClientConfig({ serverUrl, workDir });
-      console.log(`Configured server: ${serverUrl}`);
+      const password = await promptPassword('Enter cli password: ');
+      if (!password) {
+        console.error('Password is required (set LANSNC_PASSWORD or enter interactively).');
+        process.exit(1);
+      }
+      const token = deriveToken(password);
+
+      // 连 server 验证口令:错了当场报,不落半截配置
+      const policy = await verifyAuth(serverUrl, token);
+
+      writeClientConfig({ serverUrl, workDir, token });
+      console.log(`Connected to ${serverUrl}`);
+      console.log(`Server exec policy: ${policy}`);
       console.log(`Working directory: ${workDir}`);
       console.log(`Version: ${VERSION}`);
       break;
@@ -189,33 +203,18 @@ async function handleClientCommand(subArgs) {
       }
       console.log(`Server URL: ${config.serverUrl}`);
       console.log(`Working directory: ${config.workDir}`);
-      console.log(`CLI: ${config.token ? 'enabled' : 'disabled'}`);
-      break;
-    }
-    case 'enable-cli': {
-      const password = await promptPassword('Enter cli password: ');
-      if (!password) {
-        console.error('Password is required (set LANSNC_PASSWORD or enter interactively).');
-        process.exit(1);
+      console.log(`Version: ${VERSION}`);
+      if (!config.token) {
+        console.log('Password: not set (re-run: lansyncopt client config <ip:port>)');
+        return;
       }
-      const config = readClientConfig();
-      if (!config) {
-        console.error('Client not configured. Run: lansyncopt client config <ip:port> first.');
-        process.exit(1);
-      }
-      config.token = deriveToken(password);
-      writeClientConfig(config);
-      console.log('Client cli enabled (token saved).');
-      break;
-    }
-    case 'disable-cli': {
-      const config = readClientConfig();
-      if (config && config.token) {
-        delete config.token;
-        writeClientConfig(config);
-        console.log('Client cli disabled.');
-      } else {
-        console.log('Client cli was not enabled.');
+      console.log('Password: saved');
+      // 顺手探活并回显 server 端 policy;失败不致命,status 依旧可用
+      try {
+        const policy = await verifyAuth(config.serverUrl, config.token);
+        console.log(`Server: reachable (exec policy: ${policy})`);
+      } catch (err) {
+        console.log(`Server: unreachable (${err.message})`);
       }
       break;
     }
@@ -232,16 +231,17 @@ async function handlePullCommand(subArgs) {
     process.exit(1);
   }
 
-  const { serverUrl, workDir } = config;
+  const { serverUrl, workDir, token } = config;
+  if (!token) {
+    console.error('Client has no password. Re-run: lansyncopt client config <ip:port>');
+    process.exit(1);
+  }
   const currentDir = process.cwd();
 
   console.log(`Connecting to ${serverUrl}...`);
 
-  const reachable = await checkServerReachable(serverUrl);
-  if (!reachable) {
-    console.error(`Server not reachable at ${serverUrl}`);
-    process.exit(1);
-  }
+  // 网络/鉴权失败直接抛带 cause 的错误,由 main 统一打印
+  await checkServerReachable(serverUrl, token);
 
   const pathPrefix = currentDir !== workDir ? path.relative(workDir, currentDir) : '';
   if (pathPrefix) {
@@ -254,7 +254,7 @@ async function handlePullCommand(subArgs) {
   const noDelete = subArgs.includes('--no-delete');
   const pattern = subArgs.find(a => !a.startsWith('--'));
 
-  const result = await pull({ serverUrl, workDir, currentDir, pattern, noDelete });
+  const result = await pull({ serverUrl, workDir, currentDir, pattern, noDelete, token });
 
   if (result.skipped.length > 0) {
     console.log('\n  Skipped (unchanged):');
@@ -307,16 +307,17 @@ async function handlePushCommand(subArgs) {
     process.exit(1);
   }
 
-  const { serverUrl, workDir } = config;
+  const { serverUrl, workDir, token } = config;
+  if (!token) {
+    console.error('Client has no password. Re-run: lansyncopt client config <ip:port>');
+    process.exit(1);
+  }
   const currentDir = process.cwd();
 
   console.log(`Connecting to ${serverUrl}...`);
 
-  const reachable = await checkServerReachable(serverUrl);
-  if (!reachable) {
-    console.error(`Server not reachable at ${serverUrl}`);
-    process.exit(1);
-  }
+  // 网络/鉴权失败直接抛带 cause 的错误,由 main 统一打印
+  await checkServerReachable(serverUrl, token);
 
   const pathPrefix = currentDir !== workDir ? path.relative(workDir, currentDir) : '';
   if (pathPrefix) {
@@ -329,7 +330,7 @@ async function handlePushCommand(subArgs) {
   const noDelete = subArgs.includes('--no-delete');
   const pattern = subArgs.find(a => !a.startsWith('--'));
 
-  const result = await push({ serverUrl, workDir, currentDir, pattern, noDelete });
+  const result = await push({ serverUrl, workDir, currentDir, pattern, noDelete, token });
 
   if (result.skipped.length > 0) {
     console.log('\n  Skipped (unchanged):');
@@ -382,7 +383,7 @@ async function handleExecCommand(subArgs) {
     process.exit(1);
   }
   if (!config.token) {
-    console.error('Client cli not enabled. Run: lansyncopt client enable-cli');
+    console.error('Client has no password. Re-run: lansyncopt client config <ip:port>');
     process.exit(1);
   }
 

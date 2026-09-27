@@ -30,7 +30,7 @@ describe('integration', () => {
     fs.writeFileSync(path.join(serverDir, 'src', 'index.js'), 'console.log("hello")');
 
     // Start server and capture output
-    const output = await runCli(['server', 'start', '--port', String(port)], serverDir);
+    const output = await runCli(['server', 'start', '--port', String(port), '--policy', 'exec-block-black'], serverDir);
     // Parse server URL from output
     const match = output.match(/URL: (http:\/\/[^\s]+)/);
     if (match) {
@@ -53,9 +53,10 @@ describe('integration', () => {
   });
 
   it('syncs files from server to client', async () => {
-    // Configure client
+    // Configure client (password comes from LANSNC_PASSWORD, verified against server)
     const configResult = await runCli(['client', 'config', serverUrl.replace('http://', '')], clientDir);
-    assert.ok(configResult.includes('Configured server'));
+    assert.ok(configResult.includes('Connected to'));
+    assert.ok(configResult.includes('exec policy: exec-block-black'));
 
     // Pull files
     const pullResult = await runCli(['pull', '--no-delete'], clientDir);
@@ -89,7 +90,7 @@ function runCli(args, cwd) {
     const proc = spawn('node', [cliPath, ...args], {
       cwd,
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, LANSNC_CONFIG_DIR: configDir }
+      env: { ...process.env, LANSNC_CONFIG_DIR: configDir, LANSNC_PASSWORD: 'test-password' }
     });
 
     let stdout = '';
@@ -102,6 +103,8 @@ function runCli(args, cwd) {
     proc.stderr.on('data', data => {
       stderr += data.toString();
     });
+
+    proc.on('error', err => reject(err));
 
     proc.on('close', code => {
       if (code === 0) {

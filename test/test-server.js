@@ -7,6 +7,8 @@ import os from 'node:os';
 import http from 'node:http';
 import { spawn } from 'node:child_process';
 import { sanitizePath, getLocalIP, parseGitignore, shouldIgnore, getDefaultIgnoreRules, walkDir, createServer, isPortInUse, startServerDaemon, stopServerDaemon, getServerStatus } from '../src/server.js';
+import { writeServerConfig, getConfigDir } from '../src/config.js';
+import { deriveToken } from '../src/policy.js';
 
 // 隔离配置目录,避免测试日志/状态读写污染真实 ~/.lansyncopt
 process.env.LANSNC_CONFIG_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'lansyncopt-config-'));
@@ -146,7 +148,9 @@ describe('walkDir', () => {
     assert.ok(files.length >= 3);
     const paths = files.map(f => f.path);
     assert.ok(paths.includes('root.txt'));
-    assert.ok(paths.includes('src/index.js') || paths.includes('src\\index.js'));
+    // wire 统一正斜杠:client 落盘、pattern 匹配都依赖这一约定
+    assert.ok(paths.includes('src/index.js'));
+    assert.ok(!paths.some(p => p.includes('\\')));
   });
 
   it('excludes ignored files', () => {
@@ -167,12 +171,16 @@ describe('HTTP server', () => {
   let tmpDir;
   let server;
   let port;
+  let token;
 
   beforeEach(async () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lansync-http-'));
     fs.writeFileSync(path.join(tmpDir, 'test.txt'), 'hello world');
     fs.mkdirSync(path.join(tmpDir, 'sub'));
     fs.writeFileSync(path.join(tmpDir, 'sub', 'nested.txt'), 'nested content');
+
+    token = deriveToken('test-password');
+    writeServerConfig({ pid: process.pid, port: 0, rootDir: tmpDir, ip: '127.0.0.1', token, policy: 'exec-forbidden' });
 
     server = createServer(tmpDir);
     await new Promise(resolve => server.listen(0, resolve));
@@ -182,11 +190,31 @@ describe('HTTP server', () => {
   afterEach(async () => {
     await new Promise(resolve => server.close(resolve));
     fs.rmSync(tmpDir, { recursive: true, force: true });
+    try { fs.unlinkSync(path.join(getConfigDir(), 'server.json')); } catch {}
+  });
+
+  function authFetch(pathname, opts = {}) {
+    return fetch(`http://localhost:${port}${pathname}`, {
+      ...opts,
+      headers: { 'Authorization': `Bearer ${token}`, ...opts.headers }
+    });
+  }
+
+  it('rejects requests without token (401)', async () => {
+    const res = await fetch(`http://localhost:${port}/api/list`);
+    assert.strictEqual(res.status, 401);
+  });
+
+  it('rejects requests with wrong token (401)', async () => {
+    const res = await fetch(`http://localhost:${port}/api/list`, {
+      headers: { 'Authorization': 'Bearer wrong-token' }
+    });
+    assert.strictEqual(res.status, 401);
   });
 
   describe('GET /api/list', () => {
     it('returns file list', async () => {
-      const res = await fetch(`http://localhost:${port}/api/list`);
+      const res = await authFetch('/api/list');
       assert.strictEqual(res.status, 200);
       const data = await res.json();
       assert.ok(Array.isArray(data.files));
@@ -195,36 +223,45 @@ describe('HTTP server', () => {
     });
 
     it('supports path parameter', async () => {
-      const res = await fetch(`http://localhost:${port}/api/list?path=sub`);
+      const res = await authFetch('/api/list?path=sub');
       assert.strictEqual(res.status, 200);
       const data = await res.json();
+      assert.strictEqual(data.exists, true);
       const paths = data.files.map(f => f.path);
       assert.ok(paths.some(p => p.includes('nested.txt')));
+    });
+
+    it('reports exists:false for a missing directory (delete protection)', async () => {
+      const res = await authFetch('/api/list?path=not-there');
+      assert.strictEqual(res.status, 200);
+      const data = await res.json();
+      assert.strictEqual(data.exists, false);
+      assert.deepStrictEqual(data.files, []);
     });
   });
 
   describe('GET /api/file', () => {
     it('returns file content', async () => {
-      const res = await fetch(`http://localhost:${port}/api/file?path=test.txt`);
+      const res = await authFetch('/api/file?path=test.txt');
       assert.strictEqual(res.status, 200);
       const content = await res.text();
       assert.strictEqual(content, 'hello world');
     });
 
     it('returns 404 for missing file', async () => {
-      const res = await fetch(`http://localhost:${port}/api/file?path=missing.txt`);
+      const res = await authFetch('/api/file?path=missing.txt');
       assert.strictEqual(res.status, 404);
     });
 
     it('returns 403 for path traversal', async () => {
-      const res = await fetch(`http://localhost:${port}/api/file?path=../etc/passwd`);
+      const res = await authFetch('/api/file?path=../etc/passwd');
       assert.strictEqual(res.status, 403);
     });
   });
 
   describe('POST /api/file', () => {
     it('uploads file', async () => {
-      const res = await fetch(`http://localhost:${port}/api/file`, {
+      const res = await authFetch('/api/file', {
         method: 'POST',
         headers: { 'X-Path': 'new.txt' },
         body: 'new content'
@@ -236,7 +273,7 @@ describe('HTTP server', () => {
     });
 
     it('creates nested directories', async () => {
-      const res = await fetch(`http://localhost:${port}/api/file`, {
+      const res = await authFetch('/api/file', {
         method: 'POST',
         headers: { 'X-Path': 'deep/nested/file.txt' },
         body: 'nested'
@@ -246,7 +283,7 @@ describe('HTTP server', () => {
     });
 
     it('handles unicode file paths', async () => {
-      const res = await fetch(`http://localhost:${port}/api/file`, {
+      const res = await authFetch('/api/file', {
         method: 'POST',
         headers: { 'X-Path': encodeURIComponent('中文目录/文件.txt') },
         body: 'unicode content'
@@ -257,7 +294,7 @@ describe('HTTP server', () => {
     });
 
     it('handles Windows-style backslash paths', async () => {
-      const res = await fetch(`http://localhost:${port}/api/file`, {
+      const res = await authFetch('/api/file', {
         method: 'POST',
         headers: { 'X-Path': encodeURIComponent('test\\subdir\\winfile.txt') },
         body: 'windows path'
@@ -271,7 +308,7 @@ describe('HTTP server', () => {
 
   describe('DELETE /api/file', () => {
     it('deletes file', async () => {
-      const res = await fetch(`http://localhost:${port}/api/file?path=test.txt`, {
+      const res = await authFetch('/api/file?path=test.txt', {
         method: 'DELETE'
       });
       assert.strictEqual(res.status, 200);
@@ -279,7 +316,7 @@ describe('HTTP server', () => {
     });
 
     it('returns 404 for missing file', async () => {
-      const res = await fetch(`http://localhost:${port}/api/file?path=missing.txt`, {
+      const res = await authFetch('/api/file?path=missing.txt', {
         method: 'DELETE'
       });
       assert.strictEqual(res.status, 404);

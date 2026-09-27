@@ -51,8 +51,10 @@ npm unlink -g lansyncopt
 ### Server
 
 ```bash
-# Start sync server (default port 8001)
+# Start sync server (default port 8001, default policy exec-forbidden).
+# Prompts for a password; every request must carry the matching token.
 lansyncopt server start
+lansyncopt server start --policy exec-block-black
 
 # Stop server
 lansyncopt server stop
@@ -64,7 +66,7 @@ lansyncopt server status
 ### Client
 
 ```bash
-# Configure server address
+# Configure server address + password (verified against the server; saves token)
 lansyncopt client config <ip:port>
 
 # Pull files from server
@@ -80,29 +82,28 @@ lansyncopt pull --no-delete
 lansyncopt push --no-delete
 ```
 
-### Remote command execution (new)
+### Authentication
 
-Enable on both sides with the same password. The password derives a token
-(HMAC-SHA256); the token is stored, the password is not. The token only gates
-`/api/exec` — pull/push remain unchanged.
+All `/api/*` endpoints (pull/push/exec alike) require a Bearer token derived
+from the shared password (HMAC-SHA256); the token is stored, the password is
+not. The password is set on the server at `server start` and must match on the
+client at `client config` — which verifies it against the server before saving.
+Supply it via `LANSNC_PASSWORD` for non-interactive use.
+
+### Remote command execution
+
+Exec is controlled by the server-side `--policy` at start; the default
+`exec-forbidden` keeps remote commands off until you opt in:
 
 ```bash
-# On the server: enable remote exec and choose a command policy
-lansyncopt server enable-cli --policy block-black   # default: block catastrophic commands
-#   --policy allow-all            allow everything
-#   --policy block-black          block blacklist, allow graylist
-#   --policy block-black-gray     block blacklist and graylist
-
-# On the client: enter the same password
-lansyncopt client enable-cli
+#   --policy exec-forbidden        remote commands disabled (default)
+#   --policy exec-all-allow        allow everything
+#   --policy exec-block-black      block blacklist, allow graylist
+#   --policy exec-block-black-gray block blacklist and graylist
 
 # Run a command on the server (quote the whole command)
 lansyncopt exec "git pull"
 lansyncopt exec --json "npm test"   # machine-readable output for agents
-
-# Disable when done
-lansyncopt server disable-cli
-lansyncopt client disable-cli
 ```
 
 Behavior notes for `exec`:
@@ -111,7 +112,6 @@ Behavior notes for `exec`:
 - If the client is killed (e.g. an agent timeout), the connection drops and the
   server kills the whole remote process group
 - Blacklist/graylist hits return an error containing `blocked`
-- Password can be supplied via `LANSNC_PASSWORD` instead of interactive input
 - Every execution is written to the audit log (`~/.lansyncopt/server.log`)
 
 ### Pattern Examples
@@ -150,13 +150,11 @@ This avoids unnecessary transfers when only timestamps differ.
 
 ```bash
 # On machine A (server)
-lansyncopt server start
-lansyncopt server enable-cli --policy block-black
+lansyncopt server start --policy exec-block-black
 # Server running at http://192.168.1.100:8001
 
 # On machine B (client)
-lansyncopt client config 192.168.1.100:8001
-lansyncopt client enable-cli
+lansyncopt client config 192.168.1.100:8001   # prompts for the same password
 lansyncopt pull              # Sync all files
 lansyncopt pull "src/**"     # Sync only src directory
 lansyncopt push              # Push local changes to server

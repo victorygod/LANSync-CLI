@@ -30,38 +30,48 @@ describe('normalizeCommand', () => {
 
 describe('checkPolicy', () => {
   it('blocks catastrophic root deletion as black', () => {
-    const d = checkPolicy('rm -rf /', 'block-black');
+    const d = checkPolicy('rm -rf /', 'exec-block-black');
     assert.strictEqual(d.blocked, true);
     assert.strictEqual(d.list, 'black');
   });
 
+  it('exec-forbidden blocks everything (defense in depth)', () => {
+    assert.strictEqual(checkPolicy('echo hi', 'exec-forbidden').blocked, true);
+    assert.strictEqual(checkPolicy('rm -rf /', 'exec-forbidden').list, 'policy');
+  });
+
   it('does NOT block targeted absolute-path rm (word-boundary match)', () => {
-    const d = checkPolicy('rm -rf /home/user/node_modules', 'block-black');
+    const d = checkPolicy('rm -rf /home/user/node_modules', 'exec-block-black');
     assert.strictEqual(d.blocked, false);
   });
 
-  it('gray command allowed in block-black, blocked in block-black-gray', () => {
-    assert.strictEqual(checkPolicy('docker system prune', 'block-black').blocked, false);
-    assert.strictEqual(checkPolicy('docker system prune', 'block-black-gray').blocked, true);
+  it('gray command allowed in exec-block-black, blocked in exec-block-black-gray', () => {
+    assert.strictEqual(checkPolicy('docker system prune', 'exec-block-black').blocked, false);
+    assert.strictEqual(checkPolicy('docker system prune', 'exec-block-black-gray').blocked, true);
   });
 
-  it('allow-all blocks nothing', () => {
-    assert.strictEqual(checkPolicy('rm -rf /', 'allow-all').blocked, false);
-    assert.strictEqual(checkPolicy('docker system prune', 'allow-all').blocked, false);
+  it('exec-all-allow blocks nothing', () => {
+    assert.strictEqual(checkPolicy('rm -rf /', 'exec-all-allow').blocked, false);
+    assert.strictEqual(checkPolicy('docker system prune', 'exec-all-allow').blocked, false);
+  });
+
+  it('unrecognized policy value gets no gray pass (strict, no legacy aliases)', () => {
+    // 旧名 'block-black-gray' 不是合法值:不拦灰名单,仅黑名单兜底 —— 明确不兼容旧名
+    assert.strictEqual(checkPolicy('docker system prune', 'block-black-gray').blocked, false);
   });
 
   it('blacklist wins over graylist (sudo su vs sudo)', () => {
-    const d = checkPolicy('sudo su', 'block-black-gray');
+    const d = checkPolicy('sudo su', 'exec-block-black-gray');
     assert.strictEqual(d.list, 'black');
   });
 
   it('whitelist commands always pass', () => {
-    assert.strictEqual(checkPolicy('git pull', 'block-black').blocked, false);
-    assert.strictEqual(checkPolicy('npm test', 'block-black-gray').blocked, false);
+    assert.strictEqual(checkPolicy('git pull', 'exec-block-black').blocked, false);
+    assert.strictEqual(checkPolicy('npm test', 'exec-block-black-gray').blocked, false);
   });
 
   it('case-insensitive for Windows commands', () => {
-    const d = checkPolicy('FORMAT C:', 'block-black');
+    const d = checkPolicy('FORMAT C:', 'exec-block-black');
     assert.strictEqual(d.blocked, true);
     assert.strictEqual(d.list, 'black');
   });

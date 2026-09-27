@@ -16,10 +16,10 @@
 
 | 安全支柱 | 说明 |
 |---------|------|
-| **鉴权** | 口令 → token,无 token 拒绝执行 |
+| **鉴权** | 口令 → token,所有 `/api/*` 无 token 拒绝执行(pull/push/exec 全量鉴权) |
 | **分级管控** | 黑名单 + 灰名单 + `--policy`,作为纵深防御(见第四节) |
 | **审计** | 每次执行记录时间、来源 IP、命令、退出码、耗时 |
-| **可撤销** | disable 清 token,并发上限防资源耗尽 |
+| **可撤销** | `server stop` 后 daemon 消失、配置删除;并发上限防资源耗尽 |
 
 > 一句话:谁能提供正确口令,谁就拥有 server 机器的执行权。因此口令强度、token 传输、审计、可撤销的质量,决定了这个功能是「有用的远程执行」还是「给全网发后门」。
 
@@ -33,11 +33,11 @@
 token = HMAC-SHA256(key = 口令, msg = "lansync-cli-v1")
 ```
 
-- server 端 `enable-cli` 输入口令 → 派生 token 存 `server.json`
-- client 端 `enable-cli` 输入相同口令 → 派生相同 token 存 `client.json`
-- 后续每次调用 `lansync exec` 自动携带 token
+- server 端 `server start` 必输口令(默认即全量鉴权)→ 派生 token 存 `server.json`
+- client 端 `client config` 输入相同口令 → 派生相同 token,**并先调 `/api/auth` 验证**,错了当场报、不落半截配置
+- 后续每次调用 `pull`/`push`/`exec` 自动携带 token
 - **口令本身不落盘,只存派生的 token**
-- 换口令 = 双方重新 enable
+- 换口令 = server 重启 + client 重新 config
 
 口令输入方式(二选一,均支持):
 
@@ -47,29 +47,32 @@ token = HMAC-SHA256(key = 口令, msg = "lansync-cli-v1")
 ### 传输与收紧
 
 - token 放 `Authorization: Bearer <token>` header,**绝不放 URL**(URL 会进日志、被代理记录)
-- `/api/exec` 强制校验 token,无效返回 `401`
-- **token 仅作用于 `/api/exec`**:`/api/list`、`/api/file`(即 `pull`/`push`)不校验 token,行为与现有版本完全一致、向后兼容
-- 收紧 CORS:文件接口维持现状,`/api/exec` 单独作为高危面处理
+- **所有 `/api/*` 统一鉴权**(pull/push/exec 一视同仁),无/错 token 一律 `401`
+- `/api/auth`:`client config` 验证口令用,校验通过回传 server 的 exec policy
+- 收紧 CORS:相应头维持现状,`/api/exec` 单独作为高危面处理
 
 ## 四、命令分级管控(黑名单 + 灰名单)
 
 「任意 shell 命令」模式下,单纯黑名单有两个痛点:**灾难性命令**必须拦,但**高频、功能强大的半安全命令**(`sudo`、`kill`、`git reset --hard`、`docker prune`、卸载类)如果也一刀切进黑名单,会严重影响 agent 日常操作。
 
-因此采用**三级分级**,由 server 在 `enable-cli` 时通过 `--policy` 参数选择:
+因此采用**三级分级**,由 server 在 `server start` 时通过 `--policy` 参数选择:
 
 | 层级 | 标准 | 例子 | 拦截时机 |
 |------|------|------|---------|
-| **黑名单** | 灾难性 / 不可逆 / 攻击性 | `rm -rf /`、`mkfs`、`format`、`shutdown`、fork 炸弹、LOLBin 持久化、杀 server 自身 | `block-black`、`block-black-gray` 都拦 |
-| **灰名单** | 高频、功能强大、半安全(可能误伤/局部不可逆,但非灾难) | `sudo`、`kill`/`pkill`、`rm`(定向)、`git reset --hard`、`git push --force`、`systemctl restart`、`docker system prune`、`npm uninstall`/`publish` | 仅 `block-black-gray` 拦 |
+| **黑名单** | 灾难性 / 不可逆 / 攻击性 | `rm -rf /`、`mkfs`、`format`、`shutdown`、fork 炸弹、LOLBin 持久化、杀 server 自身 | `exec-block-black`、`exec-block-black-gray` 都拦 |
+| **灰名单** | 高频、功能强大、半安全(可能误伤/局部不可逆,但非灾难) | `sudo`、`kill`/`pkill`、`rm`(定向)、`git reset --hard`、`git push --force`、`systemctl restart`、`docker system prune`、`npm uninstall`/`publish` | 仅 `exec-block-black-gray` 拦 |
 | **其余(隐式白名单)** | 低风险 / 可逆 / 只读 | `git pull`、`npm install`、`npm test`、`ls`、`cat` | 始终允许 |
 
-`enable-cli` 的 `--policy` 取值:
+`server start` 的 `--policy` 取值:
 
 | 取值 | 含义 | 适用场景 |
 |------|------|---------|
-| `allow-all` | 全允许,黑灰都不拦 | 完全可信的单机 / 实验环境 |
-| `block-black` | **屏蔽黑**,灰名单放行(默认) | 常规 agent 场景:允许高频命令,拦灾难性破坏 |
-| `block-black-gray` | 屏蔽黑灰,黑+灰都拦 | 最严格,只放行低风险命令 |
+| `exec-forbidden` | 远程命令整体关闭(默认),文件同步不受影响 | 只做文件同步,不开执行面 |
+| `exec-all-allow` | 全允许,黑灰都不拦 | 完全可信的单机 / 实验环境 |
+| `exec-block-black` | **屏蔽黑**,灰名单放行 | 常规 agent 场景:允许高频命令,拦灾难性破坏 |
+| `exec-block-black-gray` | 屏蔽黑灰,黑+灰都拦 | 最严格,只放行低风险命令 |
+
+> **全新 API,不兼容旧名**:`allow-all` / `block-black` / `block-black-gray` 不再是合法值,`server start` 校验直接拒绝;配置里残留旧值不做映射,仅黑名单兜底。
 
 ### 4.1 定位与局限
 
@@ -95,9 +98,9 @@ token = HMAC-SHA256(key = 口令, msg = "lansync-cli-v1")
 
 ### 4.3 默认分级清单
 
-**匹配顺序:黑名单优先于灰名单。** 命令先与黑名单比对,命中即拦(除非 `allow-all`);未命中再与灰名单比对,命中则在 `block-black-gray` 模式下拦。因此「全盘/灾难」的精确定位(如 `rm -rf /`、`find / -delete`、`sudo su`)放黑名单,泛化形式(如 `rm`、`sudo`)放灰名单,靠顺序区分。
+**匹配顺序:黑名单优先于灰名单。** 命令先与黑名单比对,命中即拦(除非 `exec-all-allow`);未命中再与灰名单比对,命中则在 `exec-block-black-gray` 模式下拦。因此「全盘/灾难」的精确定位(如 `rm -rf /`、`find / -delete`、`sudo su`)放黑名单,泛化形式(如 `rm`、`sudo`)放灰名单,靠顺序区分。
 
-**① 默认黑名单(灾难性,除 `allow-all` 外都拦):**
+**① 默认黑名单(灾难性,除 `exec-all-allow` 外都拦):**
 
 ```js
 const DEFAULT_COMMAND_BLACKLIST = [
@@ -203,7 +206,7 @@ const DEFAULT_COMMAND_BLACKLIST = [
 ];
 ```
 
-**② 默认灰名单(高频半安全,仅 `block-black-gray` 模式拦):**
+**② 默认灰名单(高频半安全,仅 `exec-block-black-gray` 模式拦):**
 
 ```js
 const DEFAULT_COMMAND_GRAYLIST = [
@@ -268,7 +271,7 @@ const DEFAULT_COMMAND_GRAYLIST = [
 
 > **黑名单的边界**:下载并执行类(LOLBin)是军备竞赛,列不完;`rm`/`del` 的混淆变体(`rm -r -f`、`$(...)` 拼接、编码)同理。这一层只兜「明显/意外的破坏」,真正的边界靠鉴权 + 审计 + 后续沙箱隔离(见 4.5 ④)。
 
-> **`sudo` 分级说明**:`sudo` 在灰名单(默认 `block-black` 模式放行),但 `sudo su`/`sudo -i`/`sudo -s`/`sudo bash` 这类「拿到交互 shell」仍在黑名单。灰名单里的 `rm`/`sudo`/`kill`/`del` 是泛化前缀,靠「黑名单优先」与上面对应的全盘/全家精确项区分。
+> **`sudo` 分级说明**:`sudo` 在灰名单(`exec-block-black` 模式放行),但 `sudo su`/`sudo -i`/`sudo -s`/`sudo bash` 这类「拿到交互 shell」仍在黑名单。灰名单里的 `rm`/`sudo`/`kill`/`del` 是泛化前缀,靠「黑名单优先」与上面对应的全盘/全家精确项区分。
 
 ### 4.4 可配置与 policy
 
@@ -277,7 +280,7 @@ const DEFAULT_COMMAND_GRAYLIST = [
 ```jsonc
 // server.json
 {
-  "policy": "block-black",        // allow-all | block-black | block-black-gray
+  "policy": "exec-block-black",   // exec-forbidden | exec-all-allow | exec-block-black | exec-block-black-gray
   "commandBlacklist": [
     "rm -rf /",
     "shutdown",
@@ -297,7 +300,7 @@ const DEFAULT_COMMAND_GRAYLIST = [
 }
 ```
 
-`policy` 由 `enable-cli --policy` 写入,也可直接改配置后重启生效。
+`policy` 由 `server start --policy` 写入,也可直接改配置后重启生效。
 
 ### 4.5 Server 本进程与自身文件保护
 
@@ -338,35 +341,43 @@ const DEFAULT_COMMAND_GRAYLIST = [
 
 这是本方案最贴合 agent 场景的设计:agent 自己管 timeout,超时 kill 掉 client 调用,server 同步终止远端命令。
 
-### 5.2 断连检测与进程组 kill
+### 5.2 断连检测与整树 kill(平台分支)
 
-**这是整个功能最容易出 bug 的地方,实现必须覆盖:**
+**这是整个功能最容易出 bug 的地方,实现按平台分两路(`killExecTree`)**:
 
 ```js
 // 监听请求断开
 req.on('aborted', () => cleanup());
 res.on('close', () => cleanup());
 
-// spawn 时建立独立进程组
+// POSIX:spawn 建独立进程组,负号 PID 杀整组
 const child = spawn(command, {
-  shell: true,        // 任意 shell 命令
-  detached: true,     // 独立进程组
-  cwd: rootDir
+  shell: true,
+  detached: process.platform !== 'win32',
+  cwd: execCwd,
+  stdio: ['ignore', outFd, errFd]   // 临时文件捕获(见 5.3)
 });
 
-// kill 整组(负号 PID = 杀整个进程组),防止 shell 子进程变孤儿
-function cleanup() {
-  try {
-    process.kill(-child.pid, 'SIGTERM');
-    // 宽限期后升级为 SIGKILL
+function killExecTree(child) {
+  if (process.platform === 'win32') {
+    // Windows:taskkill /T = 杀整棵进程树(含 shell 拉起的子进程)
+    spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true });
+  } else {
+    try { process.kill(-child.pid, 'SIGTERM'); } catch {}
     setTimeout(() => {
-      try { process.kill(-child.pid, 'SIGKILL'); } catch {}
+      try { process.kill(-child.pid, 'SIGKILL'); } catch {}  // 宽限 2 秒后强杀
     }, 2000);
-  } catch {}
+  }
 }
 ```
 
+> **为什么 Windows 不能用 `detached`(真机实测)**:detached 产生无控制台的 cmd,其控制台类子进程(任何外部 exe)不再继承句柄,而是各自抓到一个**新的隐形控制台**——node 自报 `fd1=chardev, isTTY=true`,连 cmd 显式 `> file` 重定向都传不下去,stdout/stderr 凭空蒸发。去掉 detached 后句柄继承恢复;杀树职责交给 `taskkill /T /F`,断连即杀能力不缩水(Windows 本就没有 POSIX 语义的进程组)。
+
 **必须写测试验证**:起一个 `sleep 100` 作为远端命令,断开连接后确认 `ps` 里不再有该进程(及 `shell: true` 拉起的子进程)。
+
+### 5.3 输出捕获:临时文件,而非管道
+
+stdout/stderr 重定向到每次 exec 独立的临时文件,stdio 传 fd,命令结束后读文件返回并清理。原因:Windows 下延展环境句柄/管道继承不可靠(见 5.2 括注),`> 文件` 是最普适的捕获方式;POSIX 上同语义。
 
 ## 六、并行与并发控制
 
@@ -413,16 +424,16 @@ POST /api/exec
 **Server 管理:**
 
 ```bash
-lansyncopt server start                 # 启动文件同步服务(默认端口 8001)
+lansyncopt server start [--port <n>] [--policy <m>]  # 启动服务(必输口令;默认端口 8001、策略 exec-forbidden)
 lansyncopt server stop                  # 停止服务
-lansyncopt server status                # 查看服务状态(含 cliEnabled / policy)
+lansyncopt server status                # 查看服务状态(含 policy)
 ```
 
 **Client 配置:**
 
 ```bash
-lansyncopt client config <ip:port>      # 配置服务器地址(同时记录当前工作目录)
-lansyncopt client status                # 查看客户端配置(含 token 状态)
+lansyncopt client config <ip:port>      # 配置服务器地址 + 口令(连 /api/auth 验证后才落盘)
+lansyncopt client status                # 查看客户端配置(含口令状态与 server 可达性)
 ```
 
 **文件同步:**
@@ -435,11 +446,7 @@ lansyncopt push [pattern] [--no-delete] # 推送文件到 server
 **远程命令执行(本分支新增):**
 
 ```bash
-lansyncopt server enable-cli --policy <mode>  # 开启远程命令:输口令 + 选策略
-lansyncopt server disable-cli                 # 关闭远程命令
-lansyncopt client enable-cli                  # 客户端输同口令
-lansyncopt client disable-cli                 # 客户端撤销
-lansyncopt exec [--json] "<命令>"             # 执行远程命令(命令整体引号包裹)
+lansyncopt exec [--json] "<命令>"       # 执行远程命令(命令整体引号包裹)
 ```
 
 **全局:**
@@ -449,7 +456,7 @@ lansyncopt --version | -v              # 版本号
 lansyncopt --help | -h                 # 帮助
 ```
 
-`--policy` 取值:`allow-all`(全允许)/ `block-black`(屏蔽黑,默认)/ `block-black-gray`(屏蔽黑灰)。
+`--policy` 取值:`exec-forbidden`(关闭远程命令,默认)/ `exec-all-allow`(全允许)/ `exec-block-black`(屏蔽黑)/ `exec-block-black-gray`(屏蔽黑灰)。
 
 > `policy` 只由 **server 端**决定(client 无法覆盖)。server 判定拦截后 client 只收到 403,无法通过改 client 配置绕过。
 
@@ -473,26 +480,27 @@ agent(或脚本)通过 `lansyncopt exec` 调用,接口契约如下:
 | 拦截信号 | 命中黑/灰名单 → 非 0 退出 + stderr 含 `blocked`;无/错 token → `401` |
 | 超时 | agent 自己 kill `lansyncopt exec` 进程即可;连接断开 server 同步杀远端进程 |
 
-**前置检查**:调用前先 `lansyncopt client status` 确认已 `enable-cli`(有 token);否则 `exec` 直接报未配置。
+**前置检查**:调用前先 `lansyncopt client status` 确认口令已配置(有 token);否则 `exec` 直接报未配置。
 
 ## 九、配置变更
 
 ```jsonc
-// server.json 增加
+// server.json(start 时写入;stop 删除)
 {
-  "cliEnabled": true,
   "token": "<派生的token>",
-  "policy": "block-black",           // allow-all | block-black | block-black-gray
+  "policy": "exec-block-black",      // exec-forbidden | exec-all-allow | exec-block-black | exec-block-black-gray
   "maxConcurrent": 4,
   "commandBlacklist": ["rm -rf /", "shutdown", "reboot"],
   "commandGraylist": ["sudo", "kill", "rm", "git reset --hard"]
 }
 
-// client.json 增加
+// client.json(config 验证通过后写入)
 {
   "token": "<相同token>"
 }
 ```
+
+> 注意:token/policy 随 `server start` 一起写入,**重启必须重新输入口令**(口令即授权,不持久化跨重启);policy 只认四值集合,旧名不兼容。
 
 ## 十、审计日志
 
@@ -509,22 +517,21 @@ agent(或脚本)通过 `lansyncopt exec` 调用,接口契约如下:
 
 ## 十一、实现要点清单
 
-1. **鉴权中间件**:统一校验 `Authorization: Bearer <token>`,与 `~/.lansyncopt/server.json` 中的 token 比对
-2. **分级匹配**:黑名单优先 → 灰名单,按 `policy` 决定是否拦截灰名单;命中返回 403
+1. **鉴权中间件**:统一校验 `Authorization: Bearer <token>`,与 `~/.lansyncopt/server.json` 中的 token 比对,作用于全部 `/api/*`;`/api/auth` 供 client config 验证口令
+2. **分级匹配**:黑名单优先 → 灰名单,按 `policy` 决定是否拦截灰名单;`exec-forbidden` 在门禁层直接 403;命中返回 403
 3. **动态自引用检测**:命令与自身 PID / `~/.lansyncopt` / 代码路径比对,命中拒绝并审计
 4. **断连 kill**:`req.on('aborted')` + `res.on('close')` → 进程组 kill(SIGTERM → 2s → SIGKILL)
 5. **并发控制**:`maxConcurrent` 上限,超出返回 429
 6. **审计日志**:成功/拒绝/拦截三类事件全部落盘
-7. **enable/disable**:派生 token、清 token、状态查询
-8. **隐藏口令输入**:readline 不回显 + 支持 `LANSNC_PASSWORD` 环境变量
+7. **口令输入**:readline 不回显 + 支持 `LANSNC_PASSWORD` 环境变量;server start / client config 都必输,client 端先验证后落盘
 
 ## 十二、涉及改动文件
 
 | 文件 | 改动 |
 |------|------|
-| `src/server.js` | 新增 `/api/exec`、token 校验中间件、黑/灰名单分级 + policy、断连 kill、并发上限、审计日志、enable/disable-cli |
-| `src/client.js` | 新增 `exec()`、enable/disable 逻辑 |
-| `src/cli.js` | 新增 `exec`、`server/client enable-cli --policy`、`disable-cli` 命令 |
+| `src/server.js` | `/api/exec` + 全量鉴权中间件(所有 `/api/*`)、`/api/auth`、黑/灰名单分级 + policy、断连 kill、并发上限、审计日志 |
+| `src/client.js` | `exec()`、`verifyAuth()`、所有请求携带 token、`describeFetchError` 带错误码的报错 |
+| `src/cli.js` | `exec` 命令;`server start --policy`(必输口令);`client config` = 地址校验 + 口令 + 验证 |
 | `src/config.js` | token、policy、黑/灰名单、maxConcurrent 读写 |
 | `DESIGN.md` | 更新设计文档 |
 | `README.md` | 更新用法说明 |
@@ -538,7 +545,8 @@ agent(或脚本)通过 `lansyncopt exec` 调用,接口契约如下:
 | 任意命令 = 拥有 server 机器 | 对标「局域网远程 shell」,口令强度与可撤销是关键 |
 | server 被自身命令杀掉 / 文件被覆写 | 动态自引用检测 + 静态自保护黑名单 + 进阶降权隔离 |
 | fork 炸弹 / 资源耗尽 | `maxConcurrent` 上限 + 断连即杀 |
-| 孤儿进程(断连后残留) | 进程组 kill,必须测试覆盖 |
+| 孤儿进程(断连后残留) | POSIX 进程组 kill / Windows `taskkill /T`,断连即杀,必须测试覆盖 |
+| Windows 无控制台环境下外部 exe 输出丢失(绑定隐形控制台) | exec spawn 不用 `detached` + 临时文件捕获 + `taskkill /T` 树杀;极端环境兜底 ConPTY(见 5.2/十四·二) |
 
 ## 十四、临时改名发布(避免覆盖已装 lansync)
 
@@ -561,3 +569,24 @@ agent(或脚本)通过 `lansyncopt exec` 调用,接口契约如下:
 > **保持共享的项**(不与旧 lansync 冲突,无需改名):token 派生盐 `"lansync-cli-v1"`、环境变量 `LANSNC_PASSWORD` / `LANSNC_BLACKLIST` / `LANSNC_GRAYLIST`——旧 lansync 尚未使用这些,不冲突。
 
 > **临时性**:仅本 `feature/remote-exec` 分支改名。功能验收通过、决定合并回 `main` 后,再把名称恢复为 `lansync`(建议后续在 `package.json` 用单一字段统一管理名称,避免散落多处硬编码)。
+
+### 十四·一、版本号与部署验收
+
+跨机器部署时,「对面跑的是什么版本」必须是**一眼可见**的:
+
+- **单一来源**:版本号只在 `package.json` 定义,CLI 启动时读取;
+- **打印位置**:`server start` / `client config` / `server status` / `--version` 全部输出 `Version`;
+- **bump 约定**:每次行为变更必须升版本号,否则版本号没有区分部署的意义;
+- **部署验收**:升级远端后,`server start` 输出中的 `Version:` 就是本次启动所用代码的版本——不是预期值说明同步的不是最新源码。
+
+### 十四·二、升级 SOP(Windows 服务端实测)
+
+推荐「源码目录同步 + 重跑 setup.sh」整目录替换:
+
+1. **先 `lansyncopt server stop`**——daemon 持有 `server.log` 句柄,不停的活 `rm -rf ~/.lansyncopt` 会失败,`set -e` 中断装一半;
+2. 同步最新源码到 239 的源码目录(可用 `lansyncopt push --no-delete` 从 client 推);
+3. `sh setup.sh`(需 Git Bash)。副作用:安装目录被删重建 → **token 丢失**,server start 要重跑;
+4. `cd` 到目标同步目录再 `server start --policy <m>`(LANSNC_PASSWORD 或交互输口令;口令与 client 端一致即 token 对齐,client 端无需重配);
+5. 验收:`server start` 显示预期 `Version` + client 端跑 `lansyncopt exec "where node"`(外部 exe 输出可达即通道正常)。
+
+**Windows 服务端已知环境行为**(修复后仍建议知晓):cmd 内建命令(`type`/`dir`/`echo`)输出通道最稳,排查远端文件可直接 `lansyncopt exec "type test.txt"`;极端环境(严格 EDR)若外部进程输出仍被吞,兜底方案是 ConPTY(node-pty)用伪终端回收整棵命令树的输出。

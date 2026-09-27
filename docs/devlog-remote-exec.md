@@ -122,3 +122,28 @@
 - 无 SSH 场景下 token 走明文 HTTP,同网段可嗅探;必要时加 HMAC 签名防重放
 - 黑/灰名单是纵深防御,可被混淆/编码绕过;彻底解法是降权用户/容器沙箱(设计文档 4.5 ④)
 - `sudo` 命令断连杀进程组时,若目标进程本身脱离了进程组(如某些 daemon),SIGKILL 可能伤不到——进程组 kill 覆盖绝大多数 shell 命令,极端情况留待遇到时处理
+
+## v1.2.0 重构(2026-09-27):全量鉴权 + 去 enable/disable 开关
+
+> 本节**取代**上文「关键设计决策」第 2 条(token 仅作用于 `/api/exec`)与三级 policy 的旧命名。
+
+### 动机
+
+真实排障暴露出一串问题链:server `enable-cli` 后 `stop` 会**连 server.json 一起删掉**,重启后 cli 静默回到关闭态;client `enable-cli` 只在本地派生 token、**从不验证**,输错密码也报成功,要等 exec 时才发现 401;exec 裸抛 `fetch failed` 不带 cause(真实原因 `ENOTFOUND` 藏在 `err.cause` 里)。加上开关本身制造了「四个命令、两组状态、两端可不一致」的心智负担,决定整体简化。
+
+### 改动
+
+1. **全量鉴权**:所有 `/api/*`(含 `/api/list`、`/api/file`,即 pull/push)统一要求 `Authorization: Bearer <token>`,路由层一个鉴权墙搞定,`/api/auth` 端点供 `client config` 验证口令并回传 server 的 exec policy。
+2. **开关清零**:`server/client enable-cli|disable-cli` 四个命令删除。`server start --policy <m>` 直接带策略(默认 `exec-forbidden`,远程命令整体关闭、文件同步不受影响),密码必输;`client config <ip:port>` = 地址校验(拦逗号当点的手滑)+ 密码 + 连 server 验证,**验证通过才落盘**,不留半截配置。
+3. **policy 更名**:`allow-all`→`exec-all-allow`、`block-black`→`exec-block-black`、`block-black-gray`→`exec-block-black-gray`,新增 `exec-forbidden`(默认)。**全新 API,不做兼容**:旧名非法,`server start` 直接校验拒绝,配置里残留旧值也不映射(仅黑名单兜底)。
+4. **报错带 cause**:client 所有网络请求经 `describeFetchError` 翻译,`Cannot reach <url> (ENOTFOUND): host not found ...` 形式;`checkServerReachable` 由「返回 bool」改为抛可操作错误;`withRetry` 改按错误码识别可重试。
+5. **启动顺序修正**:`startServerDaemon` 改为**先写 token/policy 再 spawn**(daemon 每个请求都读配置,启动自检也带 token);启动失败清掉半截 server.json。
+6. **行为边界**:重启后需重新输口令(口令即授权,不跨重启持久化);`exec-forbidden` 下 exec 一律 403(鉴权已过、策略门禁区分 401/403)。
+
+### 测试与验证
+
+99/99 通过(新增:exec-forbidden 403、exec-all-allow 放行、`/api/auth` 200/401、无 token 访问文件接口 401、`checkServerReachable` 对 ENOTFOUND/ECONNREFUSED 的报错文案、旧 policy 名不受兼容)。端到端冒烟(临时配置目录):start(policy) → config(对/错密码/坏地址) → pull → exec → 默认 exec-forbidden 门禁 → status,全部符合预期。
+
+### 收口说明
+
+本次重构工作区同时存在另一窗口的并行改动,已统一核收:package.json 版本 1.1.0→1.2.0 保留;并行窗口新增的 `LEGACY_ALIASES`(旧 policy 名兼容)按最终决策**移除**——全新 API,不兼容旧名。除此之外 src/ 无 `enable-cli`/`cliEnabled`/旧 policy 名残留。

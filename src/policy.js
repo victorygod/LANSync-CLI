@@ -4,7 +4,17 @@ import crypto from 'node:crypto';
 
 const TOKEN_SALT = 'lansync-cli-v1';
 
-// ===== 默认黑名单(灾难性,除 allow-all 外都拦) =====
+// ===== exec 策略 =====
+// 由 server start --policy 选择;exec-forbidden 为默认(文件同步可用,远程命令关闭)。
+export const EXEC_POLICIES = [
+  'exec-forbidden',      // 远程命令整体关闭
+  'exec-all-allow',      // 全允许,黑灰名单都不拦
+  'exec-block-black',    // 拦黑名单,灰名单放行
+  'exec-block-black-gray' // 黑+灰都拦
+];
+export const DEFAULT_POLICY = 'exec-forbidden';
+
+// ===== 默认黑名单(灾难性,除 exec-all-allow 外都拦) =====
 export const DEFAULT_BLACKLIST = [
   // Unix / Linux / macOS
   'rm -rf /',
@@ -176,9 +186,15 @@ export function matchesList(command, list) {
 }
 
 // 分级判定:黑名单优先,再按 policy 决定是否拦灰名单。
-// policy: allow-all | block-black | block-black-gray
+// policy: exec-forbidden | exec-all-allow | exec-block-black | exec-block-black-gray
+// 无旧名兼容:policy 只认这四个值,CLI 侧 start 时校验,配置里出现旧值一律按未识别处理(仅黑名单兜底)。
 export function checkPolicy(command, policy, blacklist = DEFAULT_BLACKLIST, graylist = DEFAULT_GRAYLIST) {
-  if (policy === 'allow-all') {
+  // 正常流程下 exec-forbidden 在 server 门禁层就已拒绝;这里兜底:万一漏拦,一律拒绝。
+  if (policy === 'exec-forbidden') {
+    return { blocked: true, list: 'policy', matched: 'exec-forbidden' };
+  }
+
+  if (policy === 'exec-all-allow') {
     return { blocked: false, list: null, matched: null };
   }
 
@@ -187,7 +203,7 @@ export function checkPolicy(command, policy, blacklist = DEFAULT_BLACKLIST, gray
     return { blocked: true, list: 'black', matched: blackHit };
   }
 
-  if (policy === 'block-black-gray') {
+  if (policy === 'exec-block-black-gray') {
     const grayHit = matchesList(command, graylist);
     if (grayHit) {
       return { blocked: true, list: 'gray', matched: grayHit };

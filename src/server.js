@@ -9,7 +9,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { minimatch } from 'minimatch';
 import { readServerConfig, writeServerConfig, getConfigDir } from './config.js';
-import { deriveToken, checkPolicy, detectSelfReference, DEFAULT_BLACKLIST, DEFAULT_GRAYLIST } from './policy.js';
+import { checkPolicy, detectSelfReference, DEFAULT_POLICY, DEFAULT_BLACKLIST, DEFAULT_GRAYLIST } from './policy.js';
 
 const DEFAULT_PORT = 8001;
 const DEFAULT_MAX_CONCURRENT = 4;
@@ -182,8 +182,11 @@ export function walkDir(dir, baseDir, ignoreRules) {
           const stat = fs.statSync(fullPath);
           const content = fs.readFileSync(fullPath);
           const hash = crypto.createHash('md5').update(content).digest('hex');
+          // wire 统一正斜杠:win32 上 path.relative 产出反斜杠,原样上线的话
+          // POSIX client 会 join 出字面含 "\" 的扁平文件;"docs/file.txt" 在
+          // Windows 端读取(以及 sanitizePath 的 path.resolve)同样有效
           results.push({
-            path: relativePath,
+            path: normalizePath(relativePath),
             size: stat.size,
             mtime: stat.mtimeMs,
             hash
@@ -200,28 +203,6 @@ export function walkDir(dir, baseDir, ignoreRules) {
 }
 
 // ===== 远程命令执行(Remote Exec) =====
-
-// 启用 cli:输入口令派生 token,写入 server.json(保留 pid/port/rootDir 等已有字段)
-export function enableCli(password, policy = 'block-black') {
-  const token = deriveToken(password);
-  const config = readServerConfig() || {};
-  config.cliEnabled = true;
-  config.token = token;
-  config.policy = policy;
-  writeServerConfig(config);
-  return { token, policy };
-}
-
-// 关闭 cli:清除 token/policy,撤销授权
-export function disableCli() {
-  const config = readServerConfig();
-  if (!config) return false;
-  delete config.cliEnabled;
-  delete config.token;
-  delete config.policy;
-  writeServerConfig(config);
-  return true;
-}
 
 function readJsonBody(req) {
   return new Promise((resolve) => {
@@ -248,23 +229,15 @@ function killExecTree(child) {
   }
 }
 
-async function handleExec(req, res, rootDir) {
+async function handleExec(req, res, rootDir, config) {
   const ip = req.socket.remoteAddress || 'unknown';
 
-  // 鉴权:cli 必须已启用且 token 匹配(仅 exec 需要,文件接口不校验)
-  const config = readServerConfig();
-  if (!config || !config.cliEnabled || !config.token) {
-    log(`DENIED ip=${ip} reason=cli_not_enabled`);
-    res.writeHead(401, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: 'Unauthorized' }));
-    return;
-  }
-
-  const authHeader = req.headers['authorization'] || '';
-  if (authHeader !== `Bearer ${config.token}`) {
-    log(`DENIED ip=${ip} reason=bad_token`);
-    res.writeHead(401, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: 'Unauthorized' }));
+  // 策略门禁:exec-forbidden 直接拒(鉴权已在路由层通过,403 与 401 区分)
+  const policy = config.policy || DEFAULT_POLICY;
+  if (policy === 'exec-forbidden') {
+    log(`DENIED ip=${ip} reason=exec_forbidden`);
+    res.writeHead(403, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: `Exec is forbidden on this server (policy=${policy})` }));
     return;
   }
 
@@ -298,16 +271,17 @@ async function handleExec(req, res, rootDir) {
     return;
   }
 
-  // 分级拦截:黑名单优先,再按 policy 决定是否拦灰名单
-  const policy = config.policy || 'block-black';
-  const blacklist = [...DEFAULT_BLACKLIST, ...(config.commandBlacklist || [])];
-  const graylist = [...DEFAULT_GRAYLIST, ...(config.commandGraylist || [])];
-  const decision = checkPolicy(command, policy, blacklist, graylist);
-  if (decision.blocked) {
-    log(`BLOCKED ip=${ip} command="${command}" reason=${decision.list}(${decision.matched})`);
-    res.writeHead(403, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: `Command blocked (${decision.list})` }));
-    return;
+  // 分级拦截:黑名单优先,再按 policy 决定是否拦灰名单;exec-all-allow 跳过名单
+  if (policy !== 'exec-all-allow') {
+    const blacklist = [...DEFAULT_BLACKLIST, ...(config.commandBlacklist || [])];
+    const graylist = [...DEFAULT_GRAYLIST, ...(config.commandGraylist || [])];
+    const decision = checkPolicy(command, policy, blacklist, graylist);
+    if (decision.blocked) {
+      log(`BLOCKED ip=${ip} command="${command}" reason=${decision.list}(${decision.matched})`);
+      res.writeHead(403, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: `Command blocked (${decision.list})` }));
+      return;
+    }
   }
 
   // 并发上限(防 fork 炸弹)
@@ -394,7 +368,20 @@ export function createServer(rootDir) {
     }
 
     try {
-      if (pathname === '/api/list' && req.method === 'GET') {
+      // 统一鉴权:所有 /api/*(含文件接口)都要求 Bearer token,密码全量管控
+      const config = readServerConfig();
+      if (!config || !config.token || req.headers['authorization'] !== `Bearer ${config.token}`) {
+        log(`DENIED ip=${req.socket.remoteAddress || 'unknown'} path=${pathname} reason=unauthorized`);
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Unauthorized' }));
+        return;
+      }
+
+      if (pathname === '/api/auth' && req.method === 'GET') {
+        // client config 验证口令用:鉴权已通过,回传 server 的 exec policy
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, policy: config.policy || DEFAULT_POLICY }));
+      } else if (pathname === '/api/list' && req.method === 'GET') {
         await handleList(url, rootDir, res);
       } else if (pathname === '/api/file' && req.method === 'GET') {
         await handleFileGet(url, rootDir, res);
@@ -403,7 +390,7 @@ export function createServer(rootDir) {
       } else if (pathname === '/api/file' && req.method === 'DELETE') {
         await handleFileDelete(url, rootDir, res);
       } else if (pathname === '/api/exec' && req.method === 'POST') {
-        await handleExec(req, res, rootDir);
+        await handleExec(req, res, rootDir, config);
       } else {
         res.writeHead(404, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'Not found' }));
@@ -428,8 +415,10 @@ async function handleList(url, rootDir, res) {
   }
 
   if (!fs.existsSync(targetDir)) {
+    // 区分"目录不存在"与"目录为空":client 若把 files:[] 当"server 全空",
+    // pull 会把本地文件全部判为 toDelete。exists:false 让 client 直接拒绝。
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ files: [] }));
+    res.end(JSON.stringify({ files: [], exists: false }));
     return;
   }
 
@@ -437,7 +426,7 @@ async function handleList(url, rootDir, res) {
   const files = walkDir(targetDir, rootDir, ignoreRules);
 
   res.writeHead(200, { 'Content-Type': 'application/json' });
-  res.end(JSON.stringify({ files }));
+  res.end(JSON.stringify({ files, exists: true }));
 }
 
 async function handleFileGet(url, rootDir, res) {
@@ -550,7 +539,7 @@ export async function isPortInUse(port) {
   });
 }
 
-export async function startServerDaemon(rootDir, port = DEFAULT_PORT) {
+export async function startServerDaemon(rootDir, port = DEFAULT_PORT, token, policy = DEFAULT_POLICY) {
   if (await isPortInUse(port)) {
     // 只拒绝、不杀:占用者可能是旧 lansync server 或其他应用,不能自动 kill。
     // 给出明确出路:换端口,或用对应命令停掉占用者。
@@ -569,6 +558,9 @@ export async function startServerDaemon(rootDir, port = DEFAULT_PORT) {
   const logFile = path.join(getConfigDir(), 'server.log');
   try { fs.mkdirSync(getConfigDir(), { recursive: true }); } catch {}
 
+  // 先写 token/policy 等鉴权配置,再 spawn:daemon 的每个请求都会读它,启动自检也带 token
+  writeServerConfig({ token, policy, rootDir, port });
+
   const child = spawn(process.execPath, [
     serverPath,
     '--daemon',
@@ -586,24 +578,26 @@ export async function startServerDaemon(rootDir, port = DEFAULT_PORT) {
   let up = false;
   for (let i = 0; i < 15; i++) {
     try {
-      const res = await fetch(`http://127.0.0.1:${port}/api/list?path=`);
+      const res = await fetch(`http://127.0.0.1:${port}/api/list?path=`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       if (res.ok) { up = true; break; }
     } catch {}
     await new Promise(resolve => setTimeout(resolve, 200));
   }
   if (!up) {
+    // 清掉半截配置,避免残留一个指向死进程的状态
+    try { fs.unlinkSync(path.join(getConfigDir(), 'server.json')); } catch {}
     throw new Error(`Server failed to start on port ${port}. Check the log for details: ${logFile}`);
   }
 
-  const ip = getLocalIP();
-  writeServerConfig({
-    pid: child.pid,
-    port,
-    rootDir,
-    ip
-  });
+  // 补写 pid/ip(保留 token/policy/rootDir/port)
+  const config = readServerConfig() || {};
+  config.pid = child.pid;
+  config.ip = getLocalIP();
+  writeServerConfig(config);
 
-  return { pid: child.pid, port, ip, rootDir };
+  return { pid: child.pid, port, ip: config.ip, rootDir };
 }
 
 export function stopServerDaemon() {
@@ -650,8 +644,7 @@ export function getServerStatus() {
     rootDir: config.rootDir,
     ip: config.ip,
     url: `http://${config.ip}:${config.port}`,
-    cliEnabled: !!config.cliEnabled,
-    policy: config.policy || null
+    policy: config.policy || DEFAULT_POLICY
   };
 }
 
