@@ -242,17 +242,17 @@ async function handlePullCommand(subArgs) {
 
   const result = await pull({ serverUrl, workDir, currentDir, pattern, noDelete });
 
-  if (result.downloaded.length > 0) {
-    console.log('\n  Downloads:');
-    for (const file of result.downloaded) {
-      console.log(`    + ${file}`);
-    }
-  }
-
   if (result.skipped.length > 0) {
     console.log('\n  Skipped (unchanged):');
     for (const file of result.skipped) {
       console.log(`    ~ ${file}`);
+    }
+  }
+
+  if (result.downloaded.length > 0) {
+    console.log('\n  Downloads:');
+    for (const file of result.downloaded) {
+      console.log(`    + ${file}`);
     }
   }
 
@@ -263,7 +263,7 @@ async function handlePullCommand(subArgs) {
     }
   }
 
-  console.log(`\nSync complete: ${result.downloaded.length} downloaded, ${result.skipped.length} skipped, ${result.deleted.length} deleted`);
+  console.log(`\nSync complete: ${result.skipped.length} skipped, ${result.downloaded.length} downloaded, ${result.deleted.length} deleted`);
 
   if (result.failed.length > 0) {
     console.log(`\n  Failed (${result.failed.length}):`);
@@ -317,17 +317,17 @@ async function handlePushCommand(subArgs) {
 
   const result = await push({ serverUrl, workDir, currentDir, pattern, noDelete });
 
-  if (result.uploaded.length > 0) {
-    console.log('\n  Uploads:');
-    for (const file of result.uploaded) {
-      console.log(`    + ${file}`);
-    }
-  }
-
   if (result.skipped.length > 0) {
     console.log('\n  Skipped (unchanged):');
     for (const file of result.skipped) {
       console.log(`    ~ ${file}`);
+    }
+  }
+
+  if (result.uploaded.length > 0) {
+    console.log('\n  Uploads:');
+    for (const file of result.uploaded) {
+      console.log(`    + ${file}`);
     }
   }
 
@@ -338,7 +338,7 @@ async function handlePushCommand(subArgs) {
     }
   }
 
-  console.log(`\nSync complete: ${result.uploaded.length} uploaded, ${result.skipped.length} skipped, ${result.deleted.length} deleted`);
+  console.log(`\nSync complete: ${result.skipped.length} skipped, ${result.uploaded.length} uploaded, ${result.deleted.length} deleted`);
 
   if (result.failed.length > 0) {
     console.log(`\n  Failed (${result.failed.length}):`);

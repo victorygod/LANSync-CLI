@@ -6,6 +6,7 @@ import http from 'node:http';
 import net from 'node:net';
 import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { minimatch } from 'minimatch';
 import { readServerConfig, writeServerConfig, getConfigDir } from './config.js';
 import { deriveToken, checkPolicy, detectSelfReference, DEFAULT_BLACKLIST, DEFAULT_GRAYLIST } from './policy.js';
@@ -279,7 +280,7 @@ async function handleExec(req, res, rootDir) {
   const identifiers = [
     String(process.pid),
     getConfigDir(),
-    path.resolve(new URL(import.meta.url).pathname)
+    fileURLToPath(import.meta.url)
   ];
   const selfHit = detectSelfReference(command, identifiers);
   if (selfHit) {
@@ -523,21 +524,39 @@ export async function startServerDaemon(rootDir, port = DEFAULT_PORT) {
     throw new Error(`Port ${port} is in use`);
   }
 
+  // 注意:必须用 fileURLToPath。Windows 下 new URL().pathname 会得到 /C:/...,
+  // spawn 出来的 daemon 会立即报 "Cannot find module" 死掉,而旧代码还在 500ms 后假装成功。
+  const serverPath = fileURLToPath(import.meta.url);
+
+  // daemon 的 stderr 落到日志,启动失败时能看到真实报错(而不是静默死掉)
+  const logFile = path.join(getConfigDir(), 'server.log');
+  try { fs.mkdirSync(getConfigDir(), { recursive: true }); } catch {}
+
   const child = spawn(process.execPath, [
-    path.join(path.dirname(new URL(import.meta.url).pathname), 'server.js'),
+    serverPath,
     '--daemon',
     rootDir,
     String(port)
   ], {
     detached: true,
-    stdio: 'ignore',
+    stdio: ['ignore', 'ignore', fs.openSync(logFile, 'a')],
     windowsHide: true
   });
 
   child.unref();
 
-  // Wait a bit for server to start
-  await new Promise(resolve => setTimeout(resolve, 500));
+  // 轮询确认 server 真正起来(最多 3 秒),没起来明确报错,不假装成功
+  let up = false;
+  for (let i = 0; i < 15; i++) {
+    try {
+      const res = await fetch(`http://127.0.0.1:${port}/api/list?path=`);
+      if (res.ok) { up = true; break; }
+    } catch {}
+    await new Promise(resolve => setTimeout(resolve, 200));
+  }
+  if (!up) {
+    throw new Error(`Server failed to start on port ${port}. Check the log for details: ${logFile}`);
+  }
 
   const ip = getLocalIP();
   writeServerConfig({

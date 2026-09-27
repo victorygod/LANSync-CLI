@@ -71,6 +71,15 @@
 
 `test-server.js` 的路径遍历用例会触发 server 的 `log()`,在 `~/.lansyncopt` 留下 `server.log`。修复:`log()` 改为惰性取路径,`test-server.js` 顶部设置 `LANSNC_CONFIG_DIR` 到临时目录,并清理了已写入的文件。
 
+### Windows 下 daemon 静默死亡 + `server start` 假装成功
+
+实测跨机器使用时发现(Windows 服务端):daemon 路径用 `new URL(import.meta.url).pathname` 构造,在 Windows 得到 `/C:/...` 形式,spawn 出的子进程立即报 "Cannot find module" 死掉;而旧代码固定 sleep 500ms 后照常打印 "Server started successfully"。属于双重故障:启动失败 + 成功假象。
+
+修复(三处):
+1. daemon 脚本路径改用 `fileURLToPath(import.meta.url)`(自引用检测里同样的构造一并修正)
+2. daemon 的 stderr 重定向到 `server.log`,启动失败有迹可查
+3. `server start` 由「盲等 500ms」改为轮询 `/api/list` 最多 3 秒,server 没起来就明确报错,不再假装成功
+
 ## 测试
 
 `npm test`(node:test,零新增依赖)——**89/89 通过**,其中新增:
