@@ -313,18 +313,33 @@ async function handleExec(req, res, rootDir) {
 
   // 工作目录:相对 rootDir,任意命令可 cd 逃逸,故仅作默认值
   const execCwd = body.cwd ? path.resolve(rootDir, body.cwd) : rootDir;
+
+  // 用临时文件捕获 stdout/stderr,而不是管道:
+  // Windows 下 spawn(detached + shell:true) 时,cmd 自身的输出能进管道,
+  // 但 cmd 再拉起的外部 exe(node 等)不会收到管道句柄,输出会凭空丢失。
+  // 文件重定向(> file)对 Windows 的所有子进程都成立,是最可靠的捕获方式。
+  const execTmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lansyncopt-exec-'));
+  const outPath = path.join(execTmpDir, 'stdout.txt');
+  const errPath = path.join(execTmpDir, 'stderr.txt');
+  const outFd = fs.openSync(outPath, 'w');
+  const errFd = fs.openSync(errPath, 'w');
   const start = Date.now();
 
   activeExecs++;
-  const child = spawn(command, { shell: true, detached: true, cwd: execCwd });
-  let stdout = '';
-  let stderr = '';
+  const child = spawn(command, {
+    shell: true,
+    detached: true,
+    cwd: execCwd,
+    stdio: ['ignore', outFd, errFd]
+  });
   let settled = false;
 
   const finish = (result) => {
     if (settled) return;
     settled = true;
     activeExecs--;
+    try { fs.closeSync(outFd); } catch {}
+    try { fs.closeSync(errFd); } catch {}
     const durationMs = Date.now() - start;
     log(`EXEC ip=${ip} command="${command}" cwd="${execCwd}" exitCode=${result.exitCode} durationMs=${durationMs}`);
     if (!res.writableEnded) {
@@ -333,10 +348,17 @@ async function handleExec(req, res, rootDir) {
     }
   };
 
-  child.stdout?.on('data', d => { stdout += d; });
-  child.stderr?.on('data', d => { stderr += d; });
-  child.on('error', err => finish({ exitCode: -1, stdout, stderr: String(err.message) }));
-  child.on('close', code => finish({ exitCode: code, stdout, stderr }));
+  child.on('error', err => {
+    finish({ exitCode: -1, stdout: '', stderr: String(err.message) });
+  });
+  child.on('close', code => {
+    let stdout = '';
+    let stderr = '';
+    try { stdout = fs.readFileSync(outPath, 'utf-8'); } catch {}
+    try { stderr = fs.readFileSync(errPath, 'utf-8'); } catch {}
+    finish({ exitCode: code, stdout, stderr });
+    try { fs.rmSync(execTmpDir, { recursive: true, force: true }); } catch {}
+  });
 
   // 断连即杀:client 在命令结束前断开(agent 超时/网络断开)→ 杀整个进程组
   const abort = () => {
@@ -521,7 +543,13 @@ export async function isPortInUse(port) {
 
 export async function startServerDaemon(rootDir, port = DEFAULT_PORT) {
   if (await isPortInUse(port)) {
-    throw new Error(`Port ${port} is in use`);
+    // 只拒绝、不杀:占用者可能是旧 lansync server 或其他应用,不能自动 kill。
+    // 给出明确出路:换端口,或用对应命令停掉占用者。
+    throw new Error(
+      `Port ${port} is in use. Either start on another port (lansyncopt server start --port <n>), ` +
+      `or stop the process holding it (lansyncopt server stop for a leftover daemon; ` +
+      `lansync server stop if the old lansync server is running)`
+    );
   }
 
   // 注意:必须用 fileURLToPath。Windows 下 new URL().pathname 会得到 /C:/...,
