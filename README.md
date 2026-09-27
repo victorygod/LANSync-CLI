@@ -13,6 +13,9 @@ A minimal LAN file sync tool with optional remote command execution.
 - Support for `.gitignore` patterns
 - Safe file operations with path traversal protection
 - Content-based sync with MD5 hash verification
+- Windows ↔ macOS/Linux safe: canonical forward-slash paths on the wire, so
+  nested directories, patterns, and Unicode filenames survive sync in both
+  directions
 - Remote command execution with token auth, black/gray command policy,
   disconnect-kill, concurrency limit, and audit logging
 
@@ -113,6 +116,10 @@ Behavior notes for `exec`:
   server kills the whole remote process group
 - Blacklist/graylist hits return an error containing `blocked`
 - Every execution is written to the audit log (`~/.lansyncopt/server.log`)
+- Commands run via the platform shell (`cmd.exe` on Windows). Windows builtins
+  (`ver`, `dir` errors) print in the OEM code page (GBK on Chinese Windows),
+  so their output may look garbled; Git-for-Windows tools (`ls`, `md5sum`,
+  `uname`) speak UTF-8 and display correctly.
 
 ### Pattern Examples
 
@@ -143,8 +150,30 @@ This avoids unnecessary transfers when only timestamps differ.
 - **Automatic retry**: Network errors trigger up to 2 retries with exponential backoff
 - **Fault tolerance**: Failed files are skipped; sync continues with remaining files
 - **Error summary**: Failed files are listed at the end with error details
-- **Cross-platform**: Handles path separator differences (Windows/macOS/Linux)
+- **Cross-platform**: See [Cross-platform behavior](#cross-platform-behavior-windows--macoslinux)
 - **Chinese path support**: Full support for Chinese and special characters in filenames
+
+## Cross-platform behavior (Windows ↔ macOS/Linux)
+
+All relative paths on the wire are canonical forward-slash paths: the server
+normalizes what it lists (`walkDir`), and the client normalizes everything it
+sends and writes (server listings, `pathPrefix`, locally scanned paths).
+Every platform combination — Windows server + POSIX client, and the reverse —
+behaves identically:
+
+- Nested directories are preserved in both directions; on a POSIX client you
+  never get flat files with literal `\` in their names
+- `[pattern]` filters match identically regardless of either machine's OS
+- Unicode (e.g. Chinese) filenames round-trip correctly — names go over the
+  wire as UTF-8 and hit each filesystem via Node's Unicode-aware APIs
+- `pull` **refuses to run** when the current directory does not exist on the
+  server (`Server has no directory "..."`) instead of treating the server as
+  empty — a stalled/path-mismatched pull would otherwise delete all local
+  files. `push` has no such restriction: a first push into a directory that
+  doesn't exist yet simply creates it.
+- Known limitation: a POSIX-side file whose *name* contains a literal `\`
+  (legal on Unix) cannot be represented unambiguously on the wire and is
+  skipped rather than synced
 
 ## Examples
 
