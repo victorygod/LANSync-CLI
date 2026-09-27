@@ -154,6 +154,34 @@ export async function deleteFile(serverUrl, filePath) {
   return res.json();
 }
 
+// 执行远程命令(不设超时:命令可无限运行,client 断开后 server 自行杀进程)
+export async function execRemote(serverUrl, token, command) {
+  const res = await fetch(`${serverUrl}/api/exec`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify({ command })
+  });
+
+  if (res.status === 401) {
+    throw new Error('Unauthorized: cli not enabled or token mismatch');
+  }
+  if (res.status === 403) {
+    let detail = '';
+    try { detail = (await res.json()).error || ''; } catch {}
+    throw new Error(detail || 'Command blocked');
+  }
+  if (res.status === 429) {
+    throw new Error('Too many concurrent commands');
+  }
+  if (!res.ok) {
+    throw new Error(`Exec failed: ${res.status}`);
+  }
+  return res.json();
+}
+
 export function validateWorkDir(currentDir, workDir) {
   const normalizedCurrent = path.resolve(currentDir);
   const normalizedWork = path.resolve(workDir);
@@ -338,7 +366,7 @@ export function computePushPlan(localFiles, serverFiles, noDelete) {
   return { toUpload, toSkip, toDelete, keptCount };
 }
 
-const DEFAULT_IGNORE_RULES = ['.git', '.lansync', 'node_modules', '.DS_Store', 'Thumbs.db'];
+const DEFAULT_IGNORE_RULES = ['.git', '.lansync', '.lansyncopt', 'node_modules', '.DS_Store', 'Thumbs.db'];
 
 function loadIgnoreRules(workDir) {
   const rules = [...DEFAULT_IGNORE_RULES];

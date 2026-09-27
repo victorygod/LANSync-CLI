@@ -6,24 +6,22 @@ import path from 'node:path';
 import os from 'node:os';
 import { spawn } from 'node:child_process';
 
+// 隔离配置目录:通过 LANSNC_CONFIG_DIR 指向临时目录,绝不触碰真实 ~/.lansync / ~/.lansyncopt
+let configDir;
+
 describe('integration', () => {
   let serverDir;
   let clientDir;
   let serverUrl;
-  let cliPath;
 
   beforeEach(async () => {
-    // Clean up any existing server/config first
-    const configDir = path.join(os.homedir(), '.lansync');
-    try {
-      fs.rmSync(configDir, { recursive: true, force: true });
-    } catch {
-      // Ignore
-    }
+    configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lansyncopt-config-'));
 
-    serverDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lansync-server-'));
-    clientDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lansync-client-'));
-    cliPath = path.join(process.cwd(), 'bin', 'lansync.js');
+    serverDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lansyncopt-server-'));
+    clientDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lansyncopt-client-'));
+
+    // 用随机高端口,避免与真实 lansync server(默认 8001)冲突
+    const port = 20000 + Math.floor(Math.random() * 20000);
 
     // Create test files on server
     fs.writeFileSync(path.join(serverDir, 'readme.md'), '# Test Project');
@@ -32,7 +30,7 @@ describe('integration', () => {
     fs.writeFileSync(path.join(serverDir, 'src', 'index.js'), 'console.log("hello")');
 
     // Start server and capture output
-    const output = await runCli(['server', 'start'], serverDir);
+    const output = await runCli(['server', 'start', '--port', String(port)], serverDir);
     // Parse server URL from output
     const match = output.match(/URL: (http:\/\/[^\s]+)/);
     if (match) {
@@ -51,14 +49,7 @@ describe('integration', () => {
 
     fs.rmSync(serverDir, { recursive: true, force: true });
     fs.rmSync(clientDir, { recursive: true, force: true });
-
-    // Clean server config
-    const configDir = path.join(os.homedir(), '.lansync');
-    try {
-      fs.rmSync(configDir, { recursive: true, force: true });
-    } catch {
-      // Ignore
-    }
+    fs.rmSync(configDir, { recursive: true, force: true });
   });
 
   it('syncs files from server to client', async () => {
@@ -97,7 +88,8 @@ function runCli(args, cwd) {
     const cliPath = path.join(process.cwd(), 'bin', 'lansync.js');
     const proc = spawn('node', [cliPath, ...args], {
       cwd,
-      stdio: ['ignore', 'pipe', 'pipe']
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, LANSNC_CONFIG_DIR: configDir }
     });
 
     let stdout = '';

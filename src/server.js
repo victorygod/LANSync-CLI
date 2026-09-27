@@ -8,9 +8,11 @@ import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { minimatch } from 'minimatch';
 import { readServerConfig, writeServerConfig, getConfigDir } from './config.js';
+import { deriveToken, checkPolicy, detectSelfReference, DEFAULT_BLACKLIST, DEFAULT_GRAYLIST } from './policy.js';
 
 const DEFAULT_PORT = 8001;
-const LOG_FILE = path.join(getConfigDir(), 'server.log');
+const DEFAULT_MAX_CONCURRENT = 4;
+let activeExecs = 0;
 
 // Normalize path separators to forward slashes for cross-platform compatibility
 function normalizePath(p) {
@@ -23,7 +25,7 @@ function log(message) {
   const logLine = `[${timestamp}] ${message}\n`;
   try {
     fs.mkdirSync(getConfigDir(), { recursive: true });
-    fs.appendFileSync(LOG_FILE, logLine);
+    fs.appendFileSync(path.join(getConfigDir(), 'server.log'), logLine);
   } catch {
     // Ignore log errors
   }
@@ -32,6 +34,7 @@ function log(message) {
 const DEFAULT_IGNORE_RULES = [
   '.git',
   '.lansync',
+  '.lansyncopt',
   'node_modules',
   '.DS_Store',
   'Thumbs.db'
@@ -195,6 +198,153 @@ export function walkDir(dir, baseDir, ignoreRules) {
   return results;
 }
 
+// ===== 远程命令执行(Remote Exec) =====
+
+// 启用 cli:输入口令派生 token,写入 server.json(保留 pid/port/rootDir 等已有字段)
+export function enableCli(password, policy = 'block-black') {
+  const token = deriveToken(password);
+  const config = readServerConfig() || {};
+  config.cliEnabled = true;
+  config.token = token;
+  config.policy = policy;
+  writeServerConfig(config);
+  return { token, policy };
+}
+
+// 关闭 cli:清除 token/policy,撤销授权
+export function disableCli() {
+  const config = readServerConfig();
+  if (!config) return false;
+  delete config.cliEnabled;
+  delete config.token;
+  delete config.policy;
+  writeServerConfig(config);
+  return true;
+}
+
+function readJsonBody(req) {
+  return new Promise((resolve) => {
+    const chunks = [];
+    req.on('data', c => chunks.push(c));
+    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
+    req.on('error', () => resolve(''));
+  });
+}
+
+// 杀整个进程组(负号 PID),防止 shell 子进程变孤儿继续跑
+function killProcessGroup(child) {
+  try { process.kill(-child.pid, 'SIGTERM'); } catch {}
+  setTimeout(() => {
+    try { process.kill(-child.pid, 'SIGKILL'); } catch {}
+  }, 2000);
+}
+
+async function handleExec(req, res, rootDir) {
+  const ip = req.socket.remoteAddress || 'unknown';
+
+  // 鉴权:cli 必须已启用且 token 匹配(仅 exec 需要,文件接口不校验)
+  const config = readServerConfig();
+  if (!config || !config.cliEnabled || !config.token) {
+    log(`DENIED ip=${ip} reason=cli_not_enabled`);
+    res.writeHead(401, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Unauthorized' }));
+    return;
+  }
+
+  const authHeader = req.headers['authorization'] || '';
+  if (authHeader !== `Bearer ${config.token}`) {
+    log(`DENIED ip=${ip} reason=bad_token`);
+    res.writeHead(401, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Unauthorized' }));
+    return;
+  }
+
+  let body = {};
+  try {
+    body = JSON.parse(await readJsonBody(req));
+  } catch {
+    body = {};
+  }
+
+  const command = String(body.command || '').trim();
+  if (!command) {
+    res.writeHead(400, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Missing command' }));
+    return;
+  }
+
+  // 动态自引用检测:命令里出现 server 自身精确标识(PID/配置目录/代码路径)→ 拒绝。
+  // 注意:不把工具名(lansync/lansyncopt)做裸子串匹配——那会误拦任何含该词的路径。
+  // 「按名杀 server」(pkill -f lansync 等)由黑名单覆盖,精确标识则始终生效。
+  const identifiers = [
+    String(process.pid),
+    getConfigDir(),
+    path.resolve(new URL(import.meta.url).pathname)
+  ];
+  const selfHit = detectSelfReference(command, identifiers);
+  if (selfHit) {
+    log(`BLOCKED ip=${ip} command="${command}" reason=self-reference(${selfHit})`);
+    res.writeHead(403, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Command blocked (self-reference)' }));
+    return;
+  }
+
+  // 分级拦截:黑名单优先,再按 policy 决定是否拦灰名单
+  const policy = config.policy || 'block-black';
+  const blacklist = [...DEFAULT_BLACKLIST, ...(config.commandBlacklist || [])];
+  const graylist = [...DEFAULT_GRAYLIST, ...(config.commandGraylist || [])];
+  const decision = checkPolicy(command, policy, blacklist, graylist);
+  if (decision.blocked) {
+    log(`BLOCKED ip=${ip} command="${command}" reason=${decision.list}(${decision.matched})`);
+    res.writeHead(403, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: `Command blocked (${decision.list})` }));
+    return;
+  }
+
+  // 并发上限(防 fork 炸弹)
+  const maxConcurrent = config.maxConcurrent || DEFAULT_MAX_CONCURRENT;
+  if (activeExecs >= maxConcurrent) {
+    log(`DENIED ip=${ip} reason=too_many_concurrent`);
+    res.writeHead(429, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Too many concurrent commands' }));
+    return;
+  }
+
+  // 工作目录:相对 rootDir,任意命令可 cd 逃逸,故仅作默认值
+  const execCwd = body.cwd ? path.resolve(rootDir, body.cwd) : rootDir;
+  const start = Date.now();
+
+  activeExecs++;
+  const child = spawn(command, { shell: true, detached: true, cwd: execCwd });
+  let stdout = '';
+  let stderr = '';
+  let settled = false;
+
+  const finish = (result) => {
+    if (settled) return;
+    settled = true;
+    activeExecs--;
+    const durationMs = Date.now() - start;
+    log(`EXEC ip=${ip} command="${command}" cwd="${execCwd}" exitCode=${result.exitCode} durationMs=${durationMs}`);
+    if (!res.writableEnded) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr, durationMs }));
+    }
+  };
+
+  child.stdout?.on('data', d => { stdout += d; });
+  child.stderr?.on('data', d => { stderr += d; });
+  child.on('error', err => finish({ exitCode: -1, stdout, stderr: String(err.message) }));
+  child.on('close', code => finish({ exitCode: code, stdout, stderr }));
+
+  // 断连即杀:client 在命令结束前断开(agent 超时/网络断开)→ 杀整个进程组
+  const abort = () => {
+    if (!settled) killProcessGroup(child);
+  };
+  req.on('aborted', abort);
+  res.on('close', abort);
+}
+
 export function createServer(rootDir) {
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, `http://localhost`);
@@ -203,7 +353,7 @@ export function createServer(rootDir) {
     // CORS headers
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Path');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Path, Authorization');
 
     if (req.method === 'OPTIONS') {
       res.writeHead(200);
@@ -220,6 +370,8 @@ export function createServer(rootDir) {
         await handleFilePost(req, rootDir, res);
       } else if (pathname === '/api/file' && req.method === 'DELETE') {
         await handleFileDelete(url, rootDir, res);
+      } else if (pathname === '/api/exec' && req.method === 'POST') {
+        await handleExec(req, res, rootDir);
       } else {
         res.writeHead(404, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'Not found' }));
@@ -441,7 +593,9 @@ export function getServerStatus() {
     port: config.port,
     rootDir: config.rootDir,
     ip: config.ip,
-    url: `http://${config.ip}:${config.port}`
+    url: `http://${config.ip}:${config.port}`,
+    cliEnabled: !!config.cliEnabled,
+    policy: config.policy || null
   };
 }
 

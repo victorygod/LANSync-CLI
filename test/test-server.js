@@ -8,6 +8,9 @@ import http from 'node:http';
 import { spawn } from 'node:child_process';
 import { sanitizePath, getLocalIP, parseGitignore, shouldIgnore, getDefaultIgnoreRules, walkDir, createServer, isPortInUse, startServerDaemon, stopServerDaemon, getServerStatus } from '../src/server.js';
 
+// 隔离配置目录,避免测试日志/状态读写污染真实 ~/.lansyncopt
+process.env.LANSNC_CONFIG_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'lansyncopt-config-'));
+
 describe('server utilities', () => {
   describe('sanitizePath', () => {
     const rootDir = '/tmp/project';

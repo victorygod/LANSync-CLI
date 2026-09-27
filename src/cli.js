@@ -2,9 +2,12 @@
 import process from 'node:process';
 import path from 'node:path';
 import os from 'node:os';
-import { startServerDaemon, stopServerDaemon, getServerStatus } from './server.js';
-import { pull, push, checkServerReachable } from './client.js';
+import readline from 'node:readline';
+import { Writable } from 'node:stream';
+import { startServerDaemon, stopServerDaemon, getServerStatus, enableCli, disableCli } from './server.js';
+import { pull, push, checkServerReachable, execRemote } from './client.js';
 import { readClientConfig, writeClientConfig } from './config.js';
+import { deriveToken } from './policy.js';
 
 const args = process.argv.slice(2);
 
@@ -30,9 +33,12 @@ async function main() {
       case 'push':
         await handlePushCommand(args.slice(1));
         break;
+      case 'exec':
+        await handleExecCommand(args.slice(1));
+        break;
       case '--version':
       case '-v':
-        console.log('lansync v1.0.0');
+        console.log('lansyncopt v1.0.0');
         break;
       case '--help':
       case '-h':
@@ -51,19 +57,25 @@ async function main() {
 
 function printHelp() {
   console.log(`
-lansync - LAN file sync tool
+lansyncopt - LAN file sync tool (remote-exec)
 
 Usage:
-  lansync server start              Start server daemon
-  lansync server stop               Stop server daemon
-  lansync server status             Show server status
-  lansync client config <ip:port>   Configure server address
-  lansync client status             Show client config
-  lansync pull [pattern] [--no-delete]  Pull files from server
-  lansync push [pattern] [--no-delete]  Push files to server
+  lansyncopt server start [--port <n>]  Start server daemon
+  lansyncopt server stop                Stop server daemon
+  lansyncopt server status              Show server status
+  lansyncopt server enable-cli --policy <mode>  Enable remote exec (password + policy)
+  lansyncopt server disable-cli         Disable remote exec
+  lansyncopt client config <ip:port>    Configure server address
+  lansyncopt client status              Show client config
+  lansyncopt client enable-cli          Enable remote exec on client (same password)
+  lansyncopt client disable-cli         Disable remote exec on client
+  lansyncopt pull [pattern] [--no-delete]  Pull files from server
+  lansyncopt push [pattern] [--no-delete]  Push files to server
+  lansyncopt exec [--json] "<command>"  Execute remote command
 
 Options:
   --no-delete    Don't delete files not present on source
+  --policy <m>   allow-all | block-black | block-black-gray (default block-black)
   --version, -v  Show version
   --help, -h     Show this help
 `);
@@ -75,7 +87,11 @@ async function handleServerCommand(subArgs) {
   switch (subCommand) {
     case 'start': {
       const rootDir = process.cwd();
-      const result = await startServerDaemon(rootDir);
+      const portArgIndex = subArgs.indexOf('--port');
+      const port = portArgIndex !== -1 && subArgs[portArgIndex + 1]
+        ? parseInt(subArgs[portArgIndex + 1], 10)
+        : undefined;
+      const result = await startServerDaemon(rootDir, port);
       console.log('Server started successfully.');
       console.log(`  URL: http://${result.ip}:${result.port}`);
       console.log(`  Root: ${result.rootDir}`);
@@ -98,7 +114,32 @@ async function handleServerCommand(subArgs) {
         console.log(`  URL: ${status.url}`);
         console.log(`  Root: ${status.rootDir}`);
         console.log(`  PID: ${status.pid}`);
+        console.log(`  CLI: ${status.cliEnabled ? `enabled (policy=${status.policy})` : 'disabled'}`);
       }
+      break;
+    }
+    case 'enable-cli': {
+      const policyArgIndex = subArgs.indexOf('--policy');
+      const policy = policyArgIndex !== -1 && subArgs[policyArgIndex + 1]
+        ? subArgs[policyArgIndex + 1]
+        : 'block-black';
+      const validPolicies = ['allow-all', 'block-black', 'block-black-gray'];
+      if (!validPolicies.includes(policy)) {
+        console.error(`Invalid policy: ${policy}. Valid: ${validPolicies.join(', ')}`);
+        process.exit(1);
+      }
+      const password = await promptPassword('Enter cli password: ');
+      if (!password) {
+        console.error('Password is required (set LANSNC_PASSWORD or enter interactively).');
+        process.exit(1);
+      }
+      enableCli(password, policy);
+      console.log(`CLI enabled. policy=${policy}`);
+      break;
+    }
+    case 'disable-cli': {
+      const disabled = disableCli();
+      console.log(disabled ? 'CLI disabled.' : 'CLI was not enabled.');
       break;
     }
     default:
@@ -114,7 +155,7 @@ async function handleClientCommand(subArgs) {
     case 'config': {
       const serverAddr = subArgs[1];
       if (!serverAddr) {
-        console.error('Usage: lansync client config <ip:port>');
+        console.error('Usage: lansyncopt client config <ip:port>');
         process.exit(1);
       }
 
@@ -129,11 +170,39 @@ async function handleClientCommand(subArgs) {
     case 'status': {
       const config = readClientConfig();
       if (!config) {
-        console.log('Client not configured. Run: lansync client config <ip:port>');
+        console.log('Client not configured. Run: lansyncopt client config <ip:port>');
         return;
       }
       console.log(`Server URL: ${config.serverUrl}`);
       console.log(`Working directory: ${config.workDir}`);
+      console.log(`CLI: ${config.token ? 'enabled' : 'disabled'}`);
+      break;
+    }
+    case 'enable-cli': {
+      const password = await promptPassword('Enter cli password: ');
+      if (!password) {
+        console.error('Password is required (set LANSNC_PASSWORD or enter interactively).');
+        process.exit(1);
+      }
+      const config = readClientConfig();
+      if (!config) {
+        console.error('Client not configured. Run: lansyncopt client config <ip:port> first.');
+        process.exit(1);
+      }
+      config.token = deriveToken(password);
+      writeClientConfig(config);
+      console.log('Client cli enabled (token saved).');
+      break;
+    }
+    case 'disable-cli': {
+      const config = readClientConfig();
+      if (config && config.token) {
+        delete config.token;
+        writeClientConfig(config);
+        console.log('Client cli disabled.');
+      } else {
+        console.log('Client cli was not enabled.');
+      }
       break;
     }
     default:
@@ -145,7 +214,7 @@ async function handleClientCommand(subArgs) {
 async function handlePullCommand(subArgs) {
   const config = readClientConfig();
   if (!config) {
-    console.error('Client not configured. Run: lansync client config <ip:port>');
+    console.error('Client not configured. Run: lansyncopt client config <ip:port>');
     process.exit(1);
   }
 
@@ -220,7 +289,7 @@ async function handlePullCommand(subArgs) {
 async function handlePushCommand(subArgs) {
   const config = readClientConfig();
   if (!config) {
-    console.error('Client not configured. Run: lansync client config <ip:port>');
+    console.error('Client not configured. Run: lansyncopt client config <ip:port>');
     process.exit(1);
   }
 
@@ -290,6 +359,56 @@ async function handlePushCommand(subArgs) {
   if (result.failed.length > 0) {
     process.exit(1);
   }
+}
+
+async function handleExecCommand(subArgs) {
+  const config = readClientConfig();
+  if (!config) {
+    console.error('Client not configured. Run: lansyncopt client config <ip:port>');
+    process.exit(1);
+  }
+  if (!config.token) {
+    console.error('Client cli not enabled. Run: lansyncopt client enable-cli');
+    process.exit(1);
+  }
+
+  const { serverUrl, token } = config;
+  const json = subArgs.includes('--json');
+  const command = subArgs.filter(a => a !== '--json').join(' ');
+  if (!command) {
+    console.error('Usage: lansyncopt exec [--json] "<command>"');
+    process.exit(1);
+  }
+
+  const result = await execRemote(serverUrl, token, command);
+
+  if (json) {
+    console.log(JSON.stringify(result));
+  } else {
+    if (result.stdout) process.stdout.write(result.stdout);
+    if (result.stderr) process.stderr.write(result.stderr);
+  }
+  process.exit(result.exitCode ?? 0);
+}
+
+// 读取口令:优先环境变量 LANSNC_PASSWORD(agent 场景),否则交互式隐藏回显
+function promptPassword(promptText) {
+  return new Promise((resolve) => {
+    if (process.env.LANSNC_PASSWORD) {
+      resolve(process.env.LANSNC_PASSWORD);
+      return;
+    }
+    const muted = new Writable({
+      write(chunk, encoding, cb) { cb(); }
+    });
+    const rl = readline.createInterface({ input: process.stdin, output: muted, terminal: true });
+    process.stdout.write(promptText);
+    rl.question('', (answer) => {
+      rl.close();
+      process.stdout.write('\n');
+      resolve(answer.trim());
+    });
+  });
 }
 
 main();

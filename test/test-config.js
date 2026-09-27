@@ -20,9 +20,15 @@ describe('config module', () => {
   });
 
   describe('getConfigDir', () => {
-    it('returns ~/.lansync path', () => {
+    it('returns ~/.lansyncopt path (isolated from installed lansync)', () => {
       const configDir = getConfigDir();
-      assert.ok(configDir.endsWith('.lansync'));
+      assert.ok(configDir.endsWith('.lansyncopt'));
+    });
+
+    it('honors LANSNC_CONFIG_DIR override', () => {
+      process.env.LANSNC_CONFIG_DIR = '/tmp/custom-config';
+      assert.strictEqual(getConfigDir(), '/tmp/custom-config');
+      delete process.env.LANSNC_CONFIG_DIR;
     });
   });
 
