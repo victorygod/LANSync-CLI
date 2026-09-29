@@ -160,3 +160,20 @@ v1.2.0 之后两轮真实使用暴露的同步正确性问题,均为 fix 落地�
 ### 测试与验证
 
 win32 语义模拟验证(嵌套修剪、root 边界、越界、跨盘符、UNC、混用分隔符、`..foo` 目录名)与集成/服务端测试全量通过(test/ 共 99+ 用例)。
+
+## diff 清单级对账(2026-09-30)
+
+双机实战中发现 pull/push 的输出只能间接回答「是不是同步了」(要靠 skipped 计数倒推),需要一个专门的对账命令。
+
+### 设计与实现
+
+1. **`lansyncopt diff [pattern] [--json]`**:清单级只读对账,一次 `/api/list` + 本地扫描,零协议改动。判定只用 hash,不复用 push/pull 的 mtime+size 快路径(避免「diff 说 modified、push 却说 skip」的自相矛盾);status 三态 `modified`/`local-only`/`server-only`,不偏向任一同步方向。
+2. **返回值三层**:退出码 0/1/2(同步/有差异/错误,对齐 `git diff --quiet` 习惯)便于脚本判定;`--json` 给 agent(`{inSync, files[{path,status,local,server}], summary}`,按 path 排序可做位置对比);人类输出 git-status 风格 `M/+/-`。`--json` 时 stdout 保证只有 JSON,进度信息走 stderr 或省略。
+3. **语义对齐 push/pull**:pattern 走同一套 `expandPattern`,遵守 .gitignore;server 目录不存在不报错(只读,如实报告 local-only,与 pull 的防误删拒绝不同)。
+4. `src/cli.js` 的 diff 失败路径统一 exit 2(未配置/网络/鉴权),不影响现有各命令的退出码语义。
+
+### 测试与验证
+
+`computeDiffInventory` 单测 6 例(hash-only、三态+meta、win32 路径归一、排序稳定性)+ 集成 4 例(pull 后 exit 0 且 inSync、三态同时出现时 exit 1 且 JSON 结构断言、pattern 作用域、未配置 exit 2);test/ 全量 121 用例通过。
+
+行级内容 diff(`--content`,单文件 LCS)列为下一步,本次未实现。

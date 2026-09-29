@@ -7,7 +7,7 @@ import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { Writable } from 'node:stream';
 import { startServerDaemon, stopServerDaemon, getServerStatus } from './server.js';
-import { pull, push, checkServerReachable, verifyAuth, execRemote } from './client.js';
+import { pull, push, diff, checkServerReachable, verifyAuth, execRemote } from './client.js';
 import { readClientConfig, writeClientConfig } from './config.js';
 import { deriveToken, EXEC_POLICIES, DEFAULT_POLICY } from './policy.js';
 
@@ -47,6 +47,9 @@ async function main() {
       case 'exec':
         await handleExecCommand(args.slice(1));
         break;
+      case 'diff':
+        await handleDiffCommand(args.slice(1));
+        break;
       case '--version':
       case '-v':
         console.log(`lansyncopt v${VERSION}`);
@@ -79,6 +82,8 @@ Usage:
   lansyncopt pull [pattern] [--no-delete]  Pull files from server
   lansyncopt push [pattern] [--no-delete]  Push files to server
   lansyncopt exec [--json] "<command>"  Execute remote command
+  lansyncopt diff [pattern] [--json]    Compare local with server without transferring
+                                        exit 0 = in sync, 1 = differs, 2 = error
 
 All requests are authenticated with the password (Bearer token). The password is
 set on the server at start and must match on the client at config time.
@@ -96,6 +101,9 @@ Agent usage:
 
   1. Sync with pull/push, never as exec side effects. Each pull/push transfers
      diffs and lists changed files, so a call doubles as a diff check.
+     'lansyncopt diff [--json] [pattern]' checks sync state WITHOUT
+     transferring: exit 0 = in sync, 1 = differs. Use it to decide whether a
+     push/pull is needed.
      Run 'git commit' on the local repo BEFORE syncing: the default pull/push
      deletes files missing on the other side, uncommitted changes can be lost
      (--no-delete disables deletion).
@@ -387,6 +395,68 @@ async function handlePushCommand(subArgs) {
 
   if (result.failed.length > 0) {
     process.exit(1);
+  }
+}
+
+async function handleDiffCommand(subArgs) {
+  const json = subArgs.includes('--json');
+  const pattern = subArgs.find(a => !a.startsWith('--'));
+
+  // diff 的一切失败(未配置/网络/鉴权/越界)都退出码 2,与「有差异」的 1 严格
+  // 区分:agent 用 $? 即可判定同步状态,无需解析文本
+  const fail = (message) => {
+    console.error(json ? JSON.stringify({ error: message }) : `Error: ${message}`);
+    process.exit(2);
+  };
+
+  const config = readClientConfig();
+  if (!config) {
+    fail('Client not configured. Run: lansyncopt client config <ip:port>');
+  }
+  if (!config.token) {
+    fail('Client has no password. Re-run: lansyncopt client config <ip:port>');
+  }
+
+  const { serverUrl, workDir, token } = config;
+  const currentDir = process.cwd();
+
+  if (!json) {
+    console.log(`Comparing local (${currentDir}) with server (${serverUrl})...`);
+  }
+
+  try {
+    const result = await diff({ serverUrl, workDir, currentDir, pattern, token });
+
+    if (json) {
+      console.log(JSON.stringify(result, null, 2));
+      process.exit(result.inSync ? 0 : 1);
+    }
+
+    if (result.prefix) {
+      console.log(`Scope: ${result.prefix}/`);
+    }
+    if (!result.serverDirExists) {
+      console.log(`(note: server has no directory "${result.prefix}" - every local file reports as local-only)`);
+    }
+
+    if (result.files.length === 0) {
+      console.log(`In sync (${result.summary.inSync} file${result.summary.inSync === 1 ? '' : 's'})`);
+      return;
+    }
+
+    const MARKS = { modified: 'M', 'local-only': '+', 'server-only': '-' };
+    for (const f of result.files) {
+      const detail = f.status === 'modified'
+        ? `local ${f.local.size}B / server ${f.server.size}B`
+        : (f.status === 'local-only' ? 'only in local' : 'only in server');
+      console.log(`  ${MARKS[f.status]}  ${f.path}  ${detail}`);
+    }
+
+    const s = result.summary;
+    console.log(`\n${s.modified} modified, ${s.localOnly} local-only, ${s.serverOnly} server-only, ${s.inSync} in sync`);
+    process.exit(1);
+  } catch (err) {
+    fail(err.message);
   }
 }
 

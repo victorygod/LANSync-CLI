@@ -13,6 +13,9 @@ A minimal LAN file sync tool with optional remote command execution.
 - Support for `.gitignore` patterns
 - Safe file operations with path traversal protection
 - Content-based sync with MD5 hash verification
+- `diff` command: read-only inventory comparison between local and server
+  (which files are modified / only on one side), with JSON output and
+  sync-state exit codes, so agents can script `diff && push`
 - Windows ↔ macOS/Linux safe: canonical forward-slash paths on the wire, so
   nested directories, patterns, and Unicode filenames survive sync in both
   directions
@@ -87,6 +90,13 @@ lansyncopt pull --no-delete
 
 # Push without deleting remote files
 lansyncopt push --no-delete
+
+# Check whether local and server are in sync - no transfer, no deletion.
+# Prints modified / local-only / server-only files; --json for agents.
+# Exit code: 0 = in sync, 1 = differs, 2 = error
+lansyncopt diff
+lansyncopt diff src
+lansyncopt diff --json
 ```
 
 ### Authentication

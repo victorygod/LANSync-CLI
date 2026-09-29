@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import http from 'node:http';
-import { fetchFileList, fetchFile, uploadFile, deleteFile, checkServerReachable, verifyAuth, scanLocalFiles, computePullPlan, computePushPlan, validateWorkDir, pull, push } from '../src/client.js';
+import { fetchFileList, fetchFile, uploadFile, deleteFile, checkServerReachable, verifyAuth, scanLocalFiles, computePullPlan, computePushPlan, computeDiffInventory, validateWorkDir, pull, push } from '../src/client.js';
 import { writeServerConfig, readClientConfig } from '../src/config.js';
 
 describe('client HTTP functions', () => {
@@ -606,5 +606,93 @@ describe('cross-platform path handling (win32 wire shapes)', () => {
       /refusing to pull/
     );
     assert.ok(fs.existsSync(path.join(tmpDir, 'keep.txt')));
+  });
+});
+describe('computeDiffInventory', () => {
+  const meta = (hash, size, mtime) => ({ size, mtime, hash });
+  const localFile = (path, hash, size, mtime) => ({ path, hash, size, mtime });
+  const serverFile = (path, hash, size, mtime) => ({ path, hash, size, mtime });
+
+  it('is in sync with empty summary when both sides match exactly', () => {
+    const result = computeDiffInventory(
+      [localFile('a.js', 'h1', 10, 100)],
+      [serverFile('a.js', 'h1', 10, 100)]
+    );
+
+    assert.strictEqual(result.inSync, true);
+    assert.deepStrictEqual(result.files, []);
+    assert.deepStrictEqual(result.summary, { modified: 0, localOnly: 0, serverOnly: 0, inSync: 1 });
+  });
+
+  it('judges by hash only: equal hash with different mtime/size is still in sync', () => {
+    // push/pull 有 mtime+size 快路径;diff 必须只认内容(hash),
+    // 避免「diff 说 modified、push 却说 skip」的自相矛盾
+    const result = computeDiffInventory(
+      [localFile('a.js', 'h1', 10, 100)],
+      [serverFile('a.js', 'h1', 88, 999)]
+    );
+
+    assert.strictEqual(result.inSync, true);
+  });
+
+  it('reports inSync=false immediately in top-level bool', () => {
+    const result = computeDiffInventory(
+      [localFile('a.js', 'h1', 10, 100)],
+      [serverFile('a.js', 'h2', 10, 100)]
+    );
+
+    assert.strictEqual(result.inSync, false);
+    assert.strictEqual(result.files.length, 1);
+    assert.strictEqual(result.summary.modified, 1);
+  });
+
+  it('classifies modified / local-only / server-only and keeps side meta', () => {
+    const result = computeDiffInventory(
+      [
+        localFile('modified.js', 'L1', 120, 1000),
+        localFile('onlylocal.txt', 'L2', 4, 1000)
+      ],
+      [
+        serverFile('modified.js', 'S1', 80, 2000),
+        serverFile('onlyserver.js', 'S3', 210, 2000)
+      ]
+    );
+
+    assert.deepStrictEqual(result.files.map(f => f.path), ['modified.js', 'onlylocal.txt', 'onlyserver.js']);
+    assert.deepStrictEqual(result.files.map(f => f.status), ['modified', 'local-only', 'server-only']);
+
+    const modified = result.files.find(f => f.status === 'modified');
+    assert.deepStrictEqual(modified.local, meta('L1', 120, 1000));
+    assert.deepStrictEqual(modified.server, meta('S1', 80, 2000));
+
+    const onlyLocal = result.files.find(f => f.status === 'local-only');
+    assert.deepStrictEqual(onlyLocal.local, meta('L2', 4, 1000));
+    assert.strictEqual(onlyLocal.server, null);
+
+    const onlyServer = result.files.find(f => f.status === 'server-only');
+    assert.strictEqual(onlyServer.local, null);
+    assert.deepStrictEqual(onlyServer.server, meta('S3', 210, 2000));
+  });
+
+  it('normalizes win32 backslash paths before comparing', () => {
+    const result = computeDiffInventory(
+      [localFile('src\\cli.js', 'h1', 10, 100)],
+      [serverFile('src/cli.js', 'h1', 10, 100)]
+    );
+
+    assert.strictEqual(result.inSync, true);
+    assert.strictEqual(result.summary.inSync, 1);
+  });
+
+  it('sorts output by path for stable positional comparison', () => {
+    const result = computeDiffInventory(
+      [
+        localFile('z.txt', 'L', 1, 1),
+        localFile('a.txt', 'L2', 1, 1)
+      ],
+      [serverFile('m.txt', 'S', 1, 1)]
+    );
+
+    assert.deepStrictEqual(result.files.map(f => f.path), ['a.txt', 'm.txt', 'z.txt']);
   });
 });

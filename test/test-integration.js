@@ -107,9 +107,69 @@ describe('integration', () => {
     // server 根上的无关文件不受影响
     assert.ok(fs.existsSync(path.join(serverDir, 'readme.md')));
   });
+
+  it('diff exits 0 and reports in sync after pull', async () => {
+    await runCli(['client', 'config', serverUrl.replace('http://', '')], clientDir);
+    await runCli(['pull'], clientDir);
+
+    const { code, stdout } = await runCliCapture(['diff', '--json'], clientDir);
+
+    assert.strictEqual(code, 0);
+    const result = JSON.parse(stdout);
+    assert.strictEqual(result.inSync, true);
+    assert.deepStrictEqual(result.files, []);
+    assert.strictEqual(result.summary.inSync, 3);
+  });
+
+  it('diff exits 1 and flags modified / local-only / server-only', async () => {
+    await runCli(['client', 'config', serverUrl.replace('http://', '')], clientDir);
+    await runCli(['pull'], clientDir);
+
+    // 三种差异各造一个:本地改内容 / 本地新增 / 本地删除
+    fs.writeFileSync(path.join(clientDir, 'readme.md'), '# Changed locally');
+    fs.writeFileSync(path.join(clientDir, 'extra.txt'), 'extra');
+    fs.rmSync(path.join(clientDir, 'src', 'index.js'));
+
+    const { code, stdout } = await runCliCapture(['diff', '--json'], clientDir);
+
+    assert.strictEqual(code, 1);
+    const result = JSON.parse(stdout);
+    assert.strictEqual(result.inSync, false);
+
+    const byPath = Object.fromEntries(result.files.map(f => [f.path, f]));
+    assert.strictEqual(byPath['readme.md'].status, 'modified');
+    assert.ok(byPath['readme.md'].local.hash !== byPath['readme.md'].server.hash);
+    assert.strictEqual(byPath['extra.txt'].status, 'local-only');
+    assert.strictEqual(byPath['src/index.js'].status, 'server-only');
+
+    assert.deepStrictEqual(result.summary, { modified: 1, localOnly: 1, serverOnly: 1, inSync: 1 });
+  });
+
+  it('diff honors pattern scope', async () => {
+    await runCli(['client', 'config', serverUrl.replace('http://', '')], clientDir);
+    await runCli(['pull'], clientDir);
+    fs.rmSync(path.join(clientDir, 'src', 'index.js'));
+
+    const { code, stdout } = await runCliCapture(['diff', 'src', '--json'], clientDir);
+
+    assert.strictEqual(code, 1);
+    const result = JSON.parse(stdout);
+    assert.deepStrictEqual(result.files.map(f => f.path), ['src/index.js']);
+    assert.strictEqual(result.prefix, '');
+  });
+
+  it('diff exits 2 when client is not configured', async () => {
+    // 指向一个全新配置目录,让 client 处于未配置状态
+    configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lansyncopt-config-'));
+
+    const { code, stderr } = await runCliCapture(['diff'], clientDir);
+
+    assert.strictEqual(code, 2);
+    assert.ok(stderr.includes('not configured'));
+  });
 });
 
-function runCli(args, cwd) {
+function runCliCapture(args, cwd) {
   return new Promise((resolve, reject) => {
     const cliPath = path.join(process.cwd(), 'bin', 'lansync.js');
     const proc = spawn('node', [cliPath, ...args], {
@@ -132,11 +192,15 @@ function runCli(args, cwd) {
     proc.on('error', err => reject(err));
 
     proc.on('close', code => {
-      if (code === 0) {
-        resolve(stdout);
-      } else {
-        reject(new Error(`CLI failed: ${stderr || stdout}`));
-      }
+      resolve({ code, stdout, stderr });
     });
   });
+}
+
+async function runCli(args, cwd) {
+  const { code, stdout, stderr } = await runCliCapture(args, cwd);
+  if (code !== 0) {
+    throw new Error(`CLI failed (exit ${code}): ${stderr || stdout}`);
+  }
+  return stdout;
 }

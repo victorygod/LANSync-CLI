@@ -392,6 +392,96 @@ export function computePullPlan(serverFiles, localFiles, noDelete) {
   return { toDownload, toSkip, toDelete, keptCount };
 }
 
+// 清单级 diff:只陈述「两边内容是否一致」,不偏向 push/pull 任何一方。
+// 判定只用 hash,不复用 push/pull 的 mtime+size 快路径——diff 是给「确认是否
+// 同步」用的事实报告,若走快路径会出现「diff 说 modified、push 却说 skip」
+// 的自相矛盾。status 三态:modified / local-only / server-only;
+// 两边一致的文件不进 files,只计入 summary.inSync。
+function diffMeta(f) {
+  return { size: f.size, mtime: f.mtime, hash: f.hash };
+}
+
+export function computeDiffInventory(localFiles, serverFiles) {
+  const localMap = new Map(localFiles.map(f => [normalizePath(f.path), f]));
+  const serverMap = new Map(serverFiles.map(f => [normalizePath(f.path), f]));
+
+  const files = [];
+  let inSyncCount = 0;
+
+  for (const [key, local] of localMap) {
+    const server = serverMap.get(key);
+    if (!server) {
+      files.push({ path: key, status: 'local-only', local: diffMeta(local), server: null });
+      continue;
+    }
+    serverMap.delete(key);
+    if (local.hash === server.hash) {
+      inSyncCount++;
+    } else {
+      files.push({ path: key, status: 'modified', local: diffMeta(local), server: diffMeta(server) });
+    }
+  }
+
+  for (const [key, server] of serverMap) {
+    files.push({ path: key, status: 'server-only', local: null, server: diffMeta(server) });
+  }
+
+  // 按路径排序:两次 diff 的输出可做位置对比(agent 消费场景)
+  files.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+
+  return {
+    inSync: files.length === 0,
+    files,
+    summary: {
+      modified: files.filter(f => f.status === 'modified').length,
+      localOnly: files.filter(f => f.status === 'local-only').length,
+      serverOnly: files.filter(f => f.status === 'server-only').length,
+      inSync: inSyncCount
+    }
+  };
+}
+
+// 清单级 diff 的一次编排:一次 /api/list + 本地扫描,零协议改动,只读不传输。
+// server 目录不存在不算错误(与 pull 的拒绝语义不同):diff 是只读的事实报告,
+// 此时 server 侧清单为空,本地文件如实报告为 local-only。
+export async function diff({ serverUrl, workDir, currentDir, pattern, token }) {
+  const validation = validateWorkDir(currentDir, workDir);
+  if (!validation.valid) {
+    throw new Error(`${validation.error}\nCurrent directory: ${validation.currentDir}`);
+  }
+
+  // win32 上 path.relative 产出反斜杠前缀,统一为 `/`(server 端按正斜杠解析)
+  const pathPrefix = normalizePath(validation.pathPrefix);
+  const ignoreRules = loadIgnoreRules(workDir);
+
+  // Expand pattern for directory matching
+  const expandedPattern = expandPattern(pattern);
+
+  const listing = await fetchFileList(serverUrl, pathPrefix, token);
+  let serverFiles = mapServerFiles(listing.files, pathPrefix);
+
+  if (expandedPattern) {
+    serverFiles = serverFiles.filter(f => minimatch(f.path, expandedPattern, { dot: true }));
+  }
+
+  let localFiles = scanLocalFiles(currentDir, ignoreRules);
+  // win32 上扫描结果是反斜杠路径:统一为 `/`,与 server 侧一致
+  localFiles = localFiles.map(f => ({ ...f, path: normalizePath(f.path) }));
+
+  if (expandedPattern) {
+    localFiles = localFiles.filter(f => minimatch(f.path, expandedPattern, { dot: true }));
+  }
+
+  const inventory = computeDiffInventory(localFiles, serverFiles);
+
+  return {
+    ...inventory,
+    localRoot: currentDir,
+    prefix: pathPrefix,
+    serverDirExists: listing.exists
+  };
+}
+
 export function computePushPlan(localFiles, serverFiles, noDelete) {
   const toUpload = [];
   const toSkip = [];
