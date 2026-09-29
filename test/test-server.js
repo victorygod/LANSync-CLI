@@ -6,7 +6,7 @@ import path from 'node:path';
 import os from 'node:os';
 import http from 'node:http';
 import { spawn } from 'node:child_process';
-import { sanitizePath, getLocalIP, parseGitignore, shouldIgnore, getDefaultIgnoreRules, walkDir, createServer, isPortInUse, startServerDaemon, stopServerDaemon, getServerStatus } from '../src/server.js';
+import { sanitizePath, getLocalIP, parseGitignore, shouldIgnore, getDefaultIgnoreRules, walkDir, pruneEmptyDirs, createServer, isPortInUse, startServerDaemon, stopServerDaemon, getServerStatus } from '../src/server.js';
 import { writeServerConfig, getConfigDir } from '../src/config.js';
 import { deriveToken } from '../src/policy.js';
 
@@ -167,6 +167,60 @@ describe('walkDir', () => {
   });
 });
 
+describe('pruneEmptyDirs', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lansync-prune-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('prunes the whole empty chain up to root (call after file is gone)', () => {
+    fs.mkdirSync(path.join(tmpDir, 'a', 'b', 'c'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, 'a', 'b', 'c', 'x.txt'), 'x');
+    fs.unlinkSync(path.join(tmpDir, 'a', 'b', 'c', 'x.txt'));
+
+    pruneEmptyDirs(path.join(tmpDir, 'a', 'b', 'c', 'x.txt'), tmpDir);
+
+    assert.ok(!fs.existsSync(path.join(tmpDir, 'a')));
+    assert.ok(fs.existsSync(tmpDir));
+  });
+
+  it('stops at the first non-empty directory', () => {
+    fs.mkdirSync(path.join(tmpDir, 'a', 'b'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, 'a', 'sibling.txt'), 's');
+    fs.writeFileSync(path.join(tmpDir, 'a', 'b', 'x.txt'), 'x');
+    fs.unlinkSync(path.join(tmpDir, 'a', 'b', 'x.txt'));
+
+    pruneEmptyDirs(path.join(tmpDir, 'a', 'b', 'x.txt'), tmpDir);
+
+    // b 被修剪,a 里还有 sibling.txt,必须留下
+    assert.ok(!fs.existsSync(path.join(tmpDir, 'a', 'b')));
+    assert.ok(fs.existsSync(path.join(tmpDir, 'a', 'sibling.txt')));
+  });
+
+  it('never removes the root directory itself', () => {
+    fs.writeFileSync(path.join(tmpDir, 'only.txt'), 'x');
+    fs.unlinkSync(path.join(tmpDir, 'only.txt'));
+
+    pruneEmptyDirs(path.join(tmpDir, 'only.txt'), tmpDir);
+
+    assert.ok(fs.existsSync(tmpDir));
+  });
+
+  it('does nothing when the path is directly under root', () => {
+    fs.writeFileSync(path.join(tmpDir, 'top.txt'), 'x');
+
+    // 文件还在(未被删除)时调用,父目录即 root 本身,应无任何动作
+    pruneEmptyDirs(path.join(tmpDir, 'top.txt'), tmpDir);
+
+    assert.ok(fs.existsSync(path.join(tmpDir, 'top.txt')));
+  });
+});
+
 describe('HTTP server', () => {
   let tmpDir;
   let server;
@@ -320,6 +374,32 @@ describe('HTTP server', () => {
         method: 'DELETE'
       });
       assert.strictEqual(res.status, 404);
+    });
+
+    it('prunes empty parent directories after deleting the last file (git-style)', async () => {
+      fs.mkdirSync(path.join(tmpDir, 'a', 'b', 'c'), { recursive: true });
+      fs.writeFileSync(path.join(tmpDir, 'a', 'b', 'c', 'leaf.txt'), 'leaf');
+
+      const res = await authFetch(`/api/file?path=${encodeURIComponent('a/b/c/leaf.txt')}`, {
+        method: 'DELETE'
+      });
+
+      assert.strictEqual(res.status, 200);
+      // 文件删掉后,整串空目录 a/b/c 应被修剪干净
+      assert.ok(!fs.existsSync(path.join(tmpDir, 'a')));
+    });
+
+    it('keeps directories that still contain files', async () => {
+      fs.mkdirSync(path.join(tmpDir, 'keep', 'inner'), { recursive: true });
+      fs.writeFileSync(path.join(tmpDir, 'keep', 'inner', 'one.txt'), '1');
+      fs.writeFileSync(path.join(tmpDir, 'keep', 'inner', 'two.txt'), '2');
+
+      await authFetch(`/api/file?path=${encodeURIComponent('keep/inner/one.txt')}`, {
+        method: 'DELETE'
+      });
+
+      assert.ok(fs.existsSync(path.join(tmpDir, 'keep', 'inner', 'two.txt')));
+      assert.ok(fs.existsSync(path.join(tmpDir, 'keep', 'inner')));
     });
   });
 });

@@ -82,6 +82,31 @@ describe('integration', () => {
     // Verify file on server
     assert.ok(fs.existsSync(path.join(serverDir, 'new-file.txt')));
   });
+
+  it('prunes empty directories on server after local dir removal and push (git-style)', async () => {
+    await runCli(['client', 'config', serverUrl.replace('http://', '')], clientDir);
+    // 先 pull 对齐两侧,避免后续 push 把 server 独有文件删掉,干扰下面的断言
+    await runCli(['pull'], clientDir);
+
+    // 嵌套目录 push 上去
+    fs.mkdirSync(path.join(clientDir, 'proj/assets/deep'), { recursive: true });
+    fs.writeFileSync(path.join(clientDir, 'proj/assets/deep/a.png'), 'a');
+    fs.writeFileSync(path.join(clientDir, 'proj/assets/deep/b.png'), 'b');
+    fs.writeFileSync(path.join(clientDir, 'proj/readme.md'), 'r');
+    await runCli(['push'], clientDir);
+    assert.ok(fs.existsSync(path.join(serverDir, 'proj/assets/deep/a.png')));
+
+    // 本地删掉整个 proj 目录,再 push:文件应被删除,空目录壳也一并修剪
+    fs.rmSync(path.join(clientDir, 'proj'), { recursive: true });
+    const pushResult = await runCli(['push'], clientDir);
+    assert.ok(pushResult.includes('deleted'));
+
+    assert.ok(!fs.existsSync(path.join(serverDir, 'proj/assets/deep/a.png')));
+    // 关键断言:proj 目录壳不再残留
+    assert.ok(!fs.existsSync(path.join(serverDir, 'proj')));
+    // server 根上的无关文件不受影响
+    assert.ok(fs.existsSync(path.join(serverDir, 'readme.md')));
+  });
 });
 
 function runCli(args, cwd) {

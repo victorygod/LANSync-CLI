@@ -88,6 +88,20 @@ Options:
   --policy <m>   exec-forbidden (default) | exec-all-allow | exec-block-black | exec-block-black-gray
   --version, -v  Show version
   --help, -h     Show this help
+
+Agent usage:
+  Agents normally drive the client side. Connect first via 'client config <ip:port>'
+  (verifies the password against the server), then confirm with 'client status'.
+  Tip: set LANSNC_PASSWORD to skip interactive password prompts in scripts.
+
+  1. Sync with pull/push, never as exec side effects. Each pull/push transfers
+     diffs and lists changed files, so a call doubles as a diff check.
+     Run 'git commit' on the local repo BEFORE syncing: the default pull/push
+     deletes files missing on the other side, uncommitted changes can be lost
+     (--no-delete disables deletion).
+  2. Recommended loop: keep the server copy identical to the local repo. Edit
+     locally first, git commit, 'lansyncopt push' to the server, then
+     'lansyncopt exec "<command>"' to run commands on the server.
 `);
 }
 

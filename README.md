@@ -16,6 +16,10 @@ A minimal LAN file sync tool with optional remote command execution.
 - Windows ↔ macOS/Linux safe: canonical forward-slash paths on the wire, so
   nested directories, patterns, and Unicode filenames survive sync in both
   directions
+- Git-style directory semantics: directories are not tracked, and after push
+  deletes the last file of a directory, the empty directory shell is pruned
+  server-side (never the sync root; directories still containing ignored
+  files such as `.DS_Store` are left alone)
 - Remote command execution with token auth, black/gray command policy,
   disconnect-kill, concurrency limit, and audit logging
 

@@ -512,7 +512,7 @@ lansync server start
 | 大文件 | 流式传输，不一次性读入内存 |
 | 路径遍历攻击 | Server 校验 `..` 和路径边界，返回 403 |
 | 执行目录在工作目录外 | 拒绝执行，提示 "Must run inside workDir: <path>" |
-| 同步完成后有空目录 | 自动清理空目录 |
+| 同步完成后有空目录 | 自动清理空目录（git 式修剪：pull 侧 client 本地清理；push 侧 server 删除文件成功后向上逐级 rmdir 空目录，到 rootDir 为止，非空即停，root 永不修剪） |
 
 ## 十四、命令行输出示例
 
