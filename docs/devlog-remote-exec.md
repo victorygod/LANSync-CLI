@@ -177,3 +177,23 @@ win32 语义模拟验证(嵌套修剪、root 边界、越界、跨盘符、UNC�
 `computeDiffInventory` 单测 6 例(hash-only、三态+meta、win32 路径归一、排序稳定性)+ 集成 4 例(pull 后 exit 0 且 inSync、三态同时出现时 exit 1 且 JSON 结构断言、pattern 作用域、未配置 exit 2);test/ 全量 121 用例通过。
 
 行级内容 diff(`--content`,单文件 LCS)列为下一步,本次未实现。
+
+## 事故定位:测试写花真实 ~/.lansyncopt,Windows 活 server 即刻换 token(2026-09-30)
+
+现象:Windows 端 server 全线 401、`server.json` 消失、`server stop` 报 stopped 而端口照占。历史上多次复发,本次终于完整定位。
+
+### 根因链(四环扣死)
+
+1. **测试缺隔离**:test-client.js(/test-config.js)直接调 `writeServerConfig`,没设 `LANSNC_CONFIG_DIR`——`~/.lansyncopt/server.json` 被覆盖为 `token: 'test-token'` + 测试进程 pid。
+2. **HOME 覆盖是假隔离**:test-config.js 用 `process.env.HOME` 隔离,但 `os.homedir()` 在 Windows 走 `USERPROFILE`——**macOS 隔离生效(测试永远绿)、Windows 原样写真实配置(必炸)**。这是"两边测试结果不一致+历史反复"的直接原因。
+3. **daemon 每请求重读配置**:配置被花后 8001 真实 server 立即只认 test-token,无需重启;client 所有命令(含 `node -v` 这类 exec)全部请求层 401。
+4. **stop 的雪崩`:server.json` 里 pid 是早已结束的测试进程 → `process.kill` 无效但吞错 → `unlinkSync` 把(已花的)配置删掉 → 返回 "Server stopped."。用户看到的"停止不了 + 配置莫名消失"实为"杀错目标+删配置+真 daemon 完好"。
+
+### 修复
+
+- test-client.js / test-config.js 模块顶层 `LANSNC_CONFIG_DIR = mkdtempSync(...)`(对齐 test-server.js 既有模式);getConfigDir 默认值用例改为临时摘 env 断言后恢复。
+- 经验:**任何直接读写 config 的测试文件必须在模块顶层用 LANSNC_CONFIG_DIR,HOME 覆盖在 Windows 上是无效的**。
+
+### 遗留(见任务 #5)
+
+stopServerDaemon 仍只信配置文件里的 pid:杀失败不校验端口、报成功、删配置。孤儿 daemon(强杀/半途 start 产生)依旧杀不掉——需在 stop 后校验 isPortInUse 并报真实占用者;status 应双重校验(pid 存活+端口占用)。

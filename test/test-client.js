@@ -8,6 +8,12 @@ import http from 'node:http';
 import { fetchFileList, fetchFile, uploadFile, deleteFile, checkServerReachable, verifyAuth, scanLocalFiles, computePullPlan, computePushPlan, computeDiffInventory, validateWorkDir, pull, push } from '../src/client.js';
 import { writeServerConfig, readClientConfig } from '../src/config.js';
 
+// 必须在模块顶层隔离:line ~316 的 writeServerConfig 不隔离时会写真实
+// ~/.lansyncopt/server.json。daemon 每个请求都重读配置,在跑着 server 的
+// 机器上(Windows)这会让活 server 即刻换 token,client 全线 401。
+// (HOME 覆盖在 Windows 无效:os.homedir() 走 USERPROFILE)
+process.env.LANSNC_CONFIG_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'lansyncopt-test-client-'));
+
 describe('client HTTP functions', () => {
   let tmpDir;
   let server;
