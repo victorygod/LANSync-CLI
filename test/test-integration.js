@@ -13,6 +13,7 @@ describe('integration', () => {
   let serverDir;
   let clientDir;
   let serverUrl;
+  let serverPid;
 
   beforeEach(async () => {
     configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lansyncopt-config-'));
@@ -37,6 +38,10 @@ describe('integration', () => {
       serverUrl = match[1];
     }
     assert.ok(serverUrl, `Server URL not found in output: ${output}`);
+
+    // 记住 daemon pid:afterEach 要等它死透再删目录(win32 句柄释放滞后)
+    const pidMatch = output.match(/PID: (\d+)/);
+    serverPid = pidMatch ? parseInt(pidMatch[1], 10) : null;
   });
 
   afterEach(async () => {
@@ -48,8 +53,17 @@ describe('integration', () => {
     }
 
     // win32:测试 daemon 的 cwd 就在 serverDir 里,stop 后内核关句柄需要一瞬,
-    // 立刻 rmSync 会撞 EPERM/EBUSY——rmSync 的 maxRetries/retryDelay 仅在
-    // win32 生效,正是为这类锁设计
+    // 立刻 rmSync 会撞 EPERM/EBUSY。等 daemon pid 消失(轮询至多 5s)再删;
+    // rmSync 的 maxRetries/retryDelay 仅在 win32 生效,作为兜底
+    let tries = 0;
+    while (serverPid && tries < 25) {
+      let alive = false;
+      try { process.kill(serverPid, 0); alive = true; } catch {}
+      if (!alive) break;
+      await new Promise(resolve => setTimeout(resolve, 200));
+      tries++;
+    }
+
     fs.rmSync(serverDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
     fs.rmSync(clientDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
     fs.rmSync(configDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
@@ -162,13 +176,19 @@ describe('integration', () => {
   });
 
   it('diff exits 2 when client is not configured', async () => {
-    // 指向一个全新配置目录,让 client 处于未配置状态
+    // 指向一个全新配置目录,让 client 处于未配置状态。
+    // 用完必须恢复:afterEach 的 server stop 依赖 beforeEach 的 configDir
+    // (指向本用例 daemon 的配置),改了不还,daemon 就没人杀了(EPERM 现场已取证)
+    const originalConfigDir = configDir;
     configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lansyncopt-config-'));
+    try {
+      const { code, stderr } = await runCliCapture(['diff'], clientDir);
 
-    const { code, stderr } = await runCliCapture(['diff'], clientDir);
-
-    assert.strictEqual(code, 2);
-    assert.ok(stderr.includes('not configured'));
+      assert.strictEqual(code, 2);
+      assert.ok(stderr.includes('not configured'));
+    } finally {
+      configDir = originalConfigDir;
+    }
   });
 });
 

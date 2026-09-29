@@ -134,10 +134,10 @@ Behavior notes for `exec`:
   server kills the whole remote process group
 - Blacklist/graylist hits return an error containing `blocked`
 - Every execution is written to the audit log (`~/.lansyncopt/server.log`)
-- Commands run via the platform shell (`cmd.exe` on Windows). Windows builtins
-  (`ver`, `dir` errors) print in the OEM code page (GBK on Chinese Windows),
-  so their output may look garbled; Git-for-Windows tools (`ls`, `md5sum`,
-  `uname`) speak UTF-8 and display correctly.
+- Commands run via the platform shell (`cmd.exe` on Windows). The server
+  switches the console to UTF-8 (`chcp 65001`) before executing, so even
+  Windows builtins (`taskkill`, `dir`) emit UTF-8 and never garble over the
+  wire
 
 ### Pattern Examples
 

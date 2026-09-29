@@ -566,7 +566,11 @@ describe('cross-platform path handling (win32 wire shapes)', () => {
 
     assert.ok(fs.existsSync(path.join(tmpDir, 'docs', 'readme.md')));
     assert.ok(fs.existsSync(path.join(tmpDir, 'docs', 'sub', 'b.txt')));
-    assert.ok(!fs.existsSync(path.join(tmpDir, 'docs\\readme.md')));
+    if (process.platform !== 'win32') {
+      // 「docs\readme.md」字面摊平文件是 POSIX 上的真实风险;win32 文件系统
+      // 禁止文件名含反斜杠,该失败模式无法存在,嵌套存在性检查已覆盖其语义
+      assert.ok(!fs.existsSync(path.join(tmpDir, 'docs\\readme.md')));
+    }
     assert.deepStrictEqual(
       [...result.downloaded].sort(),
       ['docs/readme.md', 'docs/sub/b.txt', 'root.txt']

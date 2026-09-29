@@ -158,7 +158,26 @@ describe('/api/exec', () => {
 
   it('kills whole process group on client disconnect', async () => {
     const pidFile = path.join(rootDir, 'pids.txt');
-    const command = `sh -c 'echo $$ > ${pidFile}; sleep 100 & echo $! >> ${pidFile}; wait'`;
+    let command;
+
+    if (process.platform === 'win32') {
+      // Windows cmd 不识别单引号,POSIX 的 sh -c '...; wait' 会被 & 截断成多条
+      // 命令,pids 文件与进程树全失真(实测 103s 长跑失败)。改用脚本文件构造
+      // 等价进程树:node 父进程写自身 pid → spawn 子进程写其 pid → 保持 60s
+      const treeScript = path.join(rootDir, 'spawn-tree.cjs');
+      fs.writeFileSync(treeScript, `
+const { spawn } = require('child_process');
+const fs = require('fs');
+const pidFile = process.argv[2];
+fs.writeFileSync(pidFile, String(process.pid));
+const child = spawn(process.execPath, ['-e', 'setTimeout(()=>{},60000)'], { stdio: 'ignore' });
+fs.appendFileSync(pidFile, '\\n' + child.pid);
+setTimeout(() => {}, 60000);
+`);
+      command = `node "${treeScript}" "${pidFile}"`;
+    } else {
+      command = `sh -c 'echo $$ > ${pidFile}; sleep 100 & echo $! >> ${pidFile}; wait'`;
+    }
 
     const controller = new AbortController();
     const fetchPromise = fetch(`http://localhost:${port}/api/exec`, {
