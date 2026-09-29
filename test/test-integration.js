@@ -176,13 +176,19 @@ describe('integration', () => {
   });
 
   it('diff exits 2 when client is not configured', async () => {
-    // 指向一个全新配置目录,让 client 处于未配置状态
+    // 指向一个全新配置目录,让 client 处于未配置状态。
+    // 用完必须恢复:afterEach 的 server stop 依赖 beforeEach 的 configDir
+    // (指向本用例 daemon 的配置),改了不还,daemon 就没人杀了(EPERM 现场已取证)
+    const originalConfigDir = configDir;
     configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lansyncopt-config-'));
+    try {
+      const { code, stderr } = await runCliCapture(['diff'], clientDir);
 
-    const { code, stderr } = await runCliCapture(['diff'], clientDir);
-
-    assert.strictEqual(code, 2);
-    assert.ok(stderr.includes('not configured'));
+      assert.strictEqual(code, 2);
+      assert.ok(stderr.includes('not configured'));
+    } finally {
+      configDir = originalConfigDir;
+    }
   });
 });
 
