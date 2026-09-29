@@ -5,13 +5,13 @@ import fs from 'node:fs';
 import http from 'node:http';
 import net from 'node:net';
 import crypto from 'node:crypto';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { minimatch } from 'minimatch';
 import { readServerConfig, writeServerConfig, getConfigDir } from './config.js';
 import { checkPolicy, detectSelfReference, DEFAULT_POLICY, DEFAULT_BLACKLIST, DEFAULT_GRAYLIST } from './policy.js';
 
-const DEFAULT_PORT = 8001;
+export const DEFAULT_PORT = 8001;
 const DEFAULT_MAX_CONCURRENT = 4;
 let activeExecs = 0;
 
@@ -565,6 +565,77 @@ export async function isPortInUse(port) {
     });
     server.listen(port);
   });
+}
+
+// ---- 孤儿 daemon 处置(见 devlog 2026-09-30 事故)--------------------------
+// stopServerDaemon 只信 server.json 里的 pid,孤儿(半途 start/强杀/配置丢失
+// 脱管)永远杀不掉。这里给 cli 一套「端口真相」工具:谁是占用者、怎么硬杀。
+
+function pidAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// 查询 LISTEN 在指定端口上的进程 pid。无跨平台 API,netstat/lsof 各走一条;
+// 查不到(lsof 缺席、解析失败)返回 null,由调用方退化为人工提示
+export function getPortOwnerPid(port) {
+  if (process.platform === 'win32') {
+    const out = spawnSync('netstat', ['-ano'], { encoding: 'utf8', windowsHide: true });
+    if (out.status !== 0 || !out.stdout) return null;
+    // TCP    0.0.0.0:8001    0.0.0.0:0    LISTENING    12345
+    for (const line of out.stdout.split('\n')) {
+      const cols = line.trim().split(/\s+/);
+      if (cols.length >= 5 && cols[3] === 'LISTENING' && cols[1].endsWith(`:${port}`)) {
+        return parseInt(cols[4], 10) || null;
+      }
+    }
+    return null;
+  }
+  const out = spawnSync('lsof', ['-t', `-i:${port}`, '-sTCP:LISTEN'], { encoding: 'utf8' });
+  if (out.status !== 0 || !out.stdout) return null;
+  return parseInt(out.stdout.trim().split('\n')[0], 10) || null;
+}
+
+// 展示占用者身份(不拦截、不判断归属):Windows tasklist 取映像名,POSIX ps 取 comm
+export function getPidCommand(pid) {
+  if (process.platform === 'win32') {
+    const out = spawnSync('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'], { encoding: 'utf8', windowsHide: true });
+    const line = (out.stdout || '').split('\n').find(l => l.trim().startsWith('"'));
+    if (!line) return null;
+    const first = line.match(/"([^"]*)"/g);
+    return first && first[0] ? first[0].slice(1, -1) : null;
+  }
+  const out = spawnSync('ps', ['-p', String(pid), '-o', 'comm='], { encoding: 'utf8' });
+  return out.status === 0 && out.stdout.trim() ? out.stdout.trim() : null;
+}
+
+// 不经配置文件的硬杀:win32 直接 taskkill /F;POSIX 先 SIGTERM,宽限后仍在则补
+// SIGKILL。最终以「进程是否已不存在」为准,不吞错——占用者可能不是我们的
+// daemon,调用方应先把身份展示给用户确认。
+// async + 让出事件循环是必须的:若用同步睡眠,libuv 没机会处理 SIGCHLD、
+// 收割僵尸进程,kill(pid,0) 会一直命中 zombie,把「已死」误判成「仍存活」
+export async function killPidHard(pid) {
+  try {
+    if (process.platform === 'win32') {
+      spawnSync('taskkill', ['/PID', String(pid), '/F'], { windowsHide: true });
+    } else {
+      process.kill(pid, 'SIGTERM');
+    }
+  } catch {
+    // pid 不存在(ESRCH)也算达成目的,由结尾的存在性检查统一判定
+  }
+  if (process.platform !== 'win32') {
+    await new Promise(resolve => setTimeout(resolve, 300));
+    if (pidAlive(pid)) {
+      try { process.kill(pid, 'SIGKILL'); } catch {}
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+  }
+  return !pidAlive(pid);
 }
 
 export async function startServerDaemon(rootDir, port = DEFAULT_PORT, token, policy = DEFAULT_POLICY) {

@@ -197,3 +197,22 @@ win32 语义模拟验证(嵌套修剪、root 边界、越界、跨盘符、UNC�
 ### 遗留(见任务 #5)
 
 stopServerDaemon 仍只信配置文件里的 pid:杀失败不校验端口、报成功、删配置。孤儿 daemon(强杀/半途 start 产生)依旧杀不掉——需在 stop 后校验 isPortInUse 并报真实占用者;status 应双重校验(pid 存活+端口占用)。
+
+## v1.4.0(2026-09-30):server stop 端口真相 + 孤儿硬杀
+
+承接上节事故:stopServerDaemon 只信 server.json 里的 pid,孤儿 daemon(半途 start 被端口拒绝但自己删配置、强杀断管、配置丢失脱管)永远杀不掉,且 stop 会把「杀错目标还删配置」包装成成功。本版把 stop 的语义从「按配置办事」升级为「以端口真相为准」。
+
+### 设计
+
+1. **stop 后核对端口**:kill 配置 pid(或无配置)之后,再查 DEFAULT_PORT(8001)是否仍被 LISTEN 占用。空闲 → 正常结束报 stopped/No server running;被占 → 展示占用者 PID+进程名,交互确认 `Kill PID n? [y/N]`,Y/-y 才硬杀,杀完复核端口并如实汇报。
+2. **查占用者跨平台**:win32 `netstat -ano` 解析 LISTENING 行;POSIX `lsof -t -i:<port> -sTCP:LISTEN`。查不到(lsof 缺席)退化 null,只提示人工处理,绝不盲杀。
+3. **杀进程硬保证**:win32 `taskkill /PID n /F`;POSIX SIGTERM → 让出事件循环 300ms → 仍活则 SIGKILL。**async 是必须的**:第一版用 Atomics.wait 同步睡眠,libuv 没机会收 SIGCHLD、收割僵尸,kill(pid,0) 持续命中 zombie,把已死误判为存活(SIGKILL 对 zombie 返回 0,无法补救)——本地三分实验复现后改为 await。
+4. **非交互安全**:stdin 非 TTY 时确认提示直接视作 N(agent/exec 场景不悬死),并提示可加 `-y`;新占用者可能是别的程序,展示身份给用户确认,不做自动归属判断。
+
+### 测试
+
+getPortOwnerPid 听本地端口返回自身 pid / 空闲端口返回 null;getPidCommand 取名;killPidHard 杀真实子进程并断言 pid 消失、对已死 pid 返回 true。全量 126 用例通过。人工冒烟:非 TTY 下 stop 正确识别 8001 占用并保持不动,-y 一击kill 且端口清空。
+
+### 部署注意
+
+版本 1.3.0→1.4.0。setup.sh/npm 链接安装的副本不会随仓库同步自动更新——**代码 push 到机器后需要重跑安装才能让该机的 `lansyncopt` 命令携带新功能**,正在运行的 server daemonρέ也需重启。

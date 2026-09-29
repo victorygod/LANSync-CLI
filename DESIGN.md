@@ -149,7 +149,8 @@ function sanitizePath(requestedPath, rootDir) {
 
 ```bash
 lansync server start              # 启动后台服务，返回 IP:port
-lansync server stop               # 停止服务
+lansync server stop [-y]          # 停止服务;stop 后核对端口真相,发现孤儿占用
+                                  # 则展示 PID 并交互确认硬杀(非 TTY 默认不动)
 lansync server status             # 输出 IP:port、根目录、运行状态
 ```
 

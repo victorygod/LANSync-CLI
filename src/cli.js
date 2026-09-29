@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { Writable } from 'node:stream';
-import { startServerDaemon, stopServerDaemon, getServerStatus } from './server.js';
+import { startServerDaemon, stopServerDaemon, getServerStatus, getPortOwnerPid, getPidCommand, killPidHard, DEFAULT_PORT } from './server.js';
 import { pull, push, diff, checkServerReachable, verifyAuth, execRemote } from './client.js';
 import { readClientConfig, writeClientConfig } from './config.js';
 import { deriveToken, EXEC_POLICIES, DEFAULT_POLICY } from './policy.js';
@@ -75,7 +75,9 @@ lansyncopt - LAN file sync tool (remote-exec)
 
 Usage:
   lansyncopt server start [--port <n>] [--policy <m>]  Start server daemon (prompts for password)
-  lansyncopt server stop                Stop server daemon
+  lansyncopt server stop [-y]           Stop server daemon; if the port is still
+                                        held by an orphan process, show the owner
+                                        and ask to kill it (Y = kill, -y = no ask)
   lansyncopt server status              Show server status
   lansyncopt client config <ip:port>    Configure server address + password (verified against server)
   lansyncopt client status              Show client config
@@ -148,11 +150,47 @@ async function handleServerCommand(subArgs) {
       break;
     }
     case 'stop': {
+      const force = subArgs.includes('-y') || subArgs.includes('--yes');
       const stopped = stopServerDaemon();
       if (stopped) {
         console.log('Server stopped.');
+      }
+
+      // 端口真相核查:孤儿 daemon(强杀/半途 start/配置丢失)不经配置文件管理,
+      // 「stop 不报错」不等于端口已释放。发现占用 → 展示占用者 → 交互确认硬杀
+      const ownerPid = getPortOwnerPid(DEFAULT_PORT);
+      if (!ownerPid) {
+        if (!stopped) console.log('No server running.');
+        break;
+      }
+
+      const ownerCmd = getPidCommand(ownerPid);
+      if (stopped) {
+        console.log(`Warning: port ${DEFAULT_PORT} is still occupied by PID ${ownerPid}${ownerCmd ? ` (${ownerCmd})` : ''}`);
       } else {
-        console.log('No server running.');
+        console.log(`No server running, but port ${DEFAULT_PORT} is occupied:`);
+        console.log(`  PID ${ownerPid}${ownerCmd ? `  ${ownerCmd}` : ''}`);
+      }
+
+      let confirmed = force;
+      if (!confirmed) {
+        const answer = await askYesNo(`Kill PID ${ownerPid} to free port ${DEFAULT_PORT}? [y/N]: `);
+        confirmed = /^y(es)?$/i.test(answer.trim());
+      }
+
+      if (!confirmed) {
+        console.log('Left it running. Re-run with -y to kill without asking.');
+        break;
+      }
+
+      if (killPidHard(ownerPid)) {
+        const still = getPortOwnerPid(DEFAULT_PORT);
+        console.log(still
+          ? `Killed PID ${ownerPid}, but port ${DEFAULT_PORT} is STILL occupied by PID ${still}.`
+          : `Killed PID ${ownerPid}. Port ${DEFAULT_PORT} is free.`);
+      } else {
+        console.error(`Failed to kill PID ${ownerPid}. Kill it manually: taskkill /PID ${ownerPid} /F (Windows) or kill -9 ${ownerPid}.`);
+        process.exit(1);
       }
       break;
     }
@@ -488,6 +526,22 @@ async function handleExecCommand(subArgs) {
     if (result.stderr) process.stderr.write(result.stderr);
   }
   process.exit(result.exitCode ?? 0);
+}
+
+// 非交互(stdin 非 TTY)直接视作否:agent/exec 场景不能挂起干等输入
+function askYesNo(promptText) {
+  return new Promise(resolve => {
+    if (!process.stdin.isTTY) {
+      resolve('');
+      return;
+    }
+    process.stdout.write(promptText);
+    const rl = readline.createInterface({ input: process.stdin, terminal: false });
+    rl.once('line', line => {
+      rl.close();
+      resolve(line);
+    });
+  });
 }
 
 // 读取口令:优先环境变量 LANSNC_PASSWORD(agent 场景),否则交互式隐藏回显

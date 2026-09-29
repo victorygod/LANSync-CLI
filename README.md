@@ -66,8 +66,12 @@ npm unlink -g lansyncopt
 lansyncopt server start
 lansyncopt server start --policy exec-block-black
 
-# Stop server
+# Stop server. stop verifies the port afterwards: if an orphan process still
+# holds it (lost config / killed half-start), it shows the owner PID and asks
+# to kill it interactively; -y kills without asking (agent-safe: non-TTY
+# stdin never blocks and defaults to "leave it running")
 lansyncopt server stop
+lansyncopt server stop -y
 
 # Check server status
 lansyncopt server status

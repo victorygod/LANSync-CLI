@@ -6,7 +6,7 @@ import path from 'node:path';
 import os from 'node:os';
 import http from 'node:http';
 import { spawn } from 'node:child_process';
-import { sanitizePath, getLocalIP, parseGitignore, shouldIgnore, getDefaultIgnoreRules, walkDir, pruneEmptyDirs, createServer, isPortInUse, startServerDaemon, stopServerDaemon, getServerStatus } from '../src/server.js';
+import { sanitizePath, getLocalIP, parseGitignore, shouldIgnore, getDefaultIgnoreRules, walkDir, pruneEmptyDirs, createServer, isPortInUse, startServerDaemon, stopServerDaemon, getServerStatus, getPortOwnerPid, getPidCommand, killPidHard } from '../src/server.js';
 import { writeServerConfig, getConfigDir } from '../src/config.js';
 import { deriveToken } from '../src/policy.js';
 
@@ -426,4 +426,61 @@ describe('daemon management', () => {
       assert.strictEqual(status.status, 'stopped');
     });
   });
+});
+describe('orphan daemon handling (getPortOwnerPid / killPidHard)', () => {
+  it('getPortOwnerPid returns the listening process pid', async () => {
+    const holder = http.createServer();
+    await new Promise(resolve => holder.listen(0, resolve));
+    const port = holder.address().port;
+
+    try {
+      assert.strictEqual(getPortOwnerPid(port), process.pid);
+    } finally {
+      await new Promise(resolve => holder.close(resolve));
+    }
+  });
+
+  it('getPortOwnerPid returns null for a free port', async () => {
+    const other = http.createServer();
+    await new Promise(resolve => other.listen(0, resolve));
+    const freePort = other.address().port;
+    await new Promise(resolve => other.close(resolve));
+
+    assert.strictEqual(getPortOwnerPid(freePort), null);
+  });
+
+  it('getPidCommand identifies a pid', () => {
+    const cmd = getPidCommand(process.pid);
+    assert.ok(cmd, 'expected a non-empty command name for the test process');
+  });
+
+  it('killPidHard kills a spawned child and reports success', async () => {
+    const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
+      stdio: 'ignore'
+    });
+    // 等 child 真正起来
+    await new Promise(resolve => setTimeout(resolve, 300));
+
+    assert.ok(await killPidHard(child.pid), 'killPidHard should report success');
+
+    // 让出事件循环后 pid 应彻底消失(僵尸已被收割)
+    const alive = await new Promise(resolve => {
+      try {
+        process.kill(child.pid, 0);
+        resolve(true);
+      } catch {
+        resolve(false);
+      }
+    });
+    assert.strictEqual(alive, false);
+  }, 10000);
+
+  it('killPidHard returns true for an already-dead pid (ESRCH = goal achieved)', async () => {
+    const dead = spawn(process.execPath, ['-e', 'process.exit(0)'], { stdio: 'ignore' });
+    await new Promise(resolve => dead.once('exit', resolve));
+    // 再让出几轮事件循环,确保 zombie 收割、pid 释放
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    assert.strictEqual(await killPidHard(dead.pid), true);
+  }, 10000);
 });
