@@ -19,12 +19,14 @@ describe('server utilities', () => {
 
     it('returns absolute path for valid relative path', () => {
       const result = sanitizePath('src/index.js', rootDir);
-      assert.strictEqual(result, '/tmp/project/src/index.js');
+      // 期望值用 path.resolve 构造:sanitizePath 的契约就是 resolve 后仍在
+      // rootDir 内,硬编码 POSIX 绝对路径在 Windows 上必然失败(D:\tmp\...)
+      assert.strictEqual(result, path.resolve(rootDir, 'src/index.js'));
     });
 
     it('handles URL encoded paths', () => {
       const result = sanitizePath('src%20files/test.js', rootDir);
-      assert.strictEqual(result, '/tmp/project/src files/test.js');
+      assert.strictEqual(result, path.resolve(rootDir, 'src files/test.js'));
     });
 
     it('returns null for path traversal attack', () => {
