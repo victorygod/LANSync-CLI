@@ -216,3 +216,9 @@ getPortOwnerPid 听本地端口返回自身 pid / 空闲端口返回 null;getPid
 ### 部署注意
 
 版本 1.3.0→1.4.0。setup.sh/npm 链接安装的副本不会随仓库同步自动更新——**代码 push 到机器后需要重跑安装才能让该机的 `lansyncopt` 命令携带新功能**,正在运行的 server daemonρέ也需重启。
+
+### 补遗(v1.4.1,同日)
+
+1. **exec 输出 UTF-8**:win32 cmd 内建命令输出跟随 OEM codepage(中文系统 GBK),经管道回传按 UTF-8 解码成乱码(taskkill 的「成功:」变天书)。server 端执行前 `chcp 65001 >nul` 统一切 UTF-8,所有子命令受益。
+2. **测试 daemon 死透等待**:win32 下 daemon 的 cwd 锁着 temp 目录,stop 后立刻 rmSync 必撞 EPERM(强杀后内核关句柄需要一瞬;marauding maxRetries 只能 3s 兜底)。afterEach 改为轮询 daemon pid 直到消失(至多 5s)再删;并定位到今日历次被杀测试遗留的 8 个孤儿 daemon(人工 taskkill 清理)。
+3. **提交身份约定**:远程仓库的提交作者必须是仓库所在机器的 git 身份(Windows: victorygod <htli0719@outlook.com>),git log 中不得出现lanesync另一侧的身份;跨机搬运行内改动后统一以落盘机器身份提交,Mac 侧提交仅作为本机备份。

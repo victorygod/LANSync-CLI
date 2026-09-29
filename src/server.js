@@ -332,7 +332,11 @@ async function handleExec(req, res, rootDir, config) {
   const start = Date.now();
 
   activeExecs++;
-  const child = spawn(command, {
+  // win32:cmd 内建命令(taskkill/dir 等)输出跟随 OEM codepage(中文系统
+  // GBK),经管道回传被按 UTF-8 解码成乱码。执行前把控制台切到 65001(UTF-8),
+  // 所有子命令统一输出;chcp 自身的横幅用 >nul 静音。
+  const execCommand = process.platform === 'win32' ? `chcp 65001 >nul & ${command}` : command;
+  const child = spawn(execCommand, {
     shell: true,
     // POSIX 用独立进程组支持断连杀组;Windows 不用 detached(见 killExecTree 注释)
     detached: process.platform !== 'win32',
