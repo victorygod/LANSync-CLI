@@ -47,9 +47,12 @@ describe('integration', () => {
       // Ignore
     }
 
-    fs.rmSync(serverDir, { recursive: true, force: true });
-    fs.rmSync(clientDir, { recursive: true, force: true });
-    fs.rmSync(configDir, { recursive: true, force: true });
+    // win32:测试 daemon 的 cwd 就在 serverDir 里,stop 后内核关句柄需要一瞬,
+    // 立刻 rmSync 会撞 EPERM/EBUSY——rmSync 的 maxRetries/retryDelay 仅在
+    // win32 生效,正是为这类锁设计
+    fs.rmSync(serverDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
+    fs.rmSync(clientDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
+    fs.rmSync(configDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
   });
 
   it('syncs files from server to client', async () => {
