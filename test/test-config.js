@@ -19,10 +19,17 @@ describe('config module', () => {
     originalHome = process.env.HOME;
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lansync-test-'));
     process.env.HOME = tmpDir;
+    // 双保险:模块顶层已设隔离,但任何用例中途 delete 都会让后续用例
+    // 回落 os.homedir() 写真实 ~/.lansyncopt(Windows 实测事故:test-config
+    // :58/72 把活 server 的配置覆盖,daemon 每请求重读配置即刻换 token)。
+    // 每个用例都重新钉一遍。
+    process.env.LANSNC_CONFIG_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'lansyncopt-test-config-'));
   });
 
   afterEach(() => {
     process.env.HOME = originalHome;
+    // 不 delete、也不还原到「无值」:保持在本文件的隔离目录上,
+    // 目录本体由模块顶层创建,文件进程结束一起消失
   });
 
   describe('getConfigDir', () => {
@@ -41,9 +48,18 @@ describe('config module', () => {
     });
 
     it('honors LANSNC_CONFIG_DIR override', () => {
+      // 此用例本身在动 env:结束时必须恢复(否则摘隔离,后续用例写盘穿透)
+      const saved = process.env.LANSNC_CONFIG_DIR;
       process.env.LANSNC_CONFIG_DIR = '/tmp/custom-config';
-      assert.strictEqual(getConfigDir(), '/tmp/custom-config');
-      delete process.env.LANSNC_CONFIG_DIR;
+      try {
+        assert.strictEqual(getConfigDir(), '/tmp/custom-config');
+      } finally {
+        if (saved !== undefined) {
+          process.env.LANSNC_CONFIG_DIR = saved;
+        } else {
+          delete process.env.LANSNC_CONFIG_DIR;
+        }
+      }
     });
   });
 
