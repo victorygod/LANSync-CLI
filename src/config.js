@@ -4,7 +4,12 @@ import path from 'node:path';
 import os from 'node:os';
 
 export function getConfigDir() {
-  return path.join(os.homedir(), '.lansync');
+  // 支持环境变量覆盖(测试隔离 / 灰度发布)。
+  // 默认 ~/.lansyncopt:与已安装的 lansync(~/.lansync)彻底隔离,避免覆盖其配置。
+  if (process.env.LANSNC_CONFIG_DIR) {
+    return process.env.LANSNC_CONFIG_DIR;
+  }
+  return path.join(os.homedir(), '.lansyncopt');
 }
 
 function ensureConfigDir() {

@@ -1,0 +1,555 @@
+From b7679c3205a23ea955c595218da7f6357094cebe Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=E6=B2=90=E9=AA=81?= <lihantian.lht@antgroup.com>
+Date: Wed, 30 Sep 2026 01:07:42 +0800
+Subject: [PATCH] =?UTF-8?q?feat:=20lansyncopt=20diff=20=E2=80=94=20read-on?=
+ =?UTF-8?q?ly=20inventory=20diff=20between=20local=20and=20server?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Client-only change, no protocol/server modifications. One /api/list +
+local scan. Verdict is hash-only (no mtime fast path) so diff never
+contradicts push/push's skip decision; statuses are directional-neutral:
+modified / local-only / server-only.
+
+Return value in three layers: exit codes 0 (in sync) / 1 (differs) /
+2 (error); --json ({inSync, files[{path,status,local,server}], summary},
+path-sorted) with pure-JSON stdout; git-status-style human output.
+Server dir missing is a fact (local-only), not an error, unlike pull.
+
+Tests: 6 unit (hash-only, three statuses, win32 paths, sort order) +
+4 integration (exit 0 after pull, exit 1 with all three statuses,
+pattern scope, exit 2 unconfigured) — 121 total pass. --content
+single-file line diff is planned next.
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+---
+ DESIGN.md                  | 30 +++++++++++++
+ README.md                  | 10 +++++
+ docs/devlog-remote-exec.md | 17 +++++++
+ src/cli.js                 | 72 ++++++++++++++++++++++++++++-
+ src/client.js              | 90 +++++++++++++++++++++++++++++++++++++
+ test/test-client.js        | 92 +++++++++++++++++++++++++++++++++++++-
+ test/test-integration.js   | 76 ++++++++++++++++++++++++++++---
+ 7 files changed, 378 insertions(+), 9 deletions(-)
+
+diff --git a/DESIGN.md b/DESIGN.md
+index d2a6f76..c354778 100644
+--- a/DESIGN.md
++++ b/DESIGN.md
+@@ -159,6 +159,7 @@ lansync server status             # 输出 IP:port、根目录、运行状态
+ lansync client config <ip:port>   # 配置服务器地址（同时记录当前工作目录）
+ lansync pull [pattern] [--no-delete]  # 拉取文件（无参数=完整同步）
+ lansync push [pattern] [--no-delete]  # 推送文件（无参数=完整同步）
++lansync diff [pattern] [--json]   # 清单级 diff：比较本地与 server（只读，不传输）
+ lansync client status             # 查看当前配置
+ ```
+ 
+@@ -168,6 +169,35 @@ lansync client status             # 查看当前配置
+ |------|------|
+ | `pattern` | 可选，glob 模式过滤文件，如 `*.js` 或 `src/**` |
+ | `--no-delete` | 不删除目标端多余文件，只同步新增和修改的文件 |
++| `--json`（diff） | machine-friendly 输出；stdout 只含 JSON |
++
++### 5.4 diff（清单级对账）
++
++只读命令：一次 `/api/list` + 本地扫描，零协议改动，不做任何传输/删除。
++回答「两边是否同步、差异在哪些文件」。
++
++设计要点：
++
++- **判定只用 hash**，不复用 push/pull 的 mtime+size 快路径——diff 是事实报告，
++  走快路径会出现「diff 说 modified、push 却说 skip」的自相矛盾
++- **不偏向 push/pull 任何一方**：status 只有 `modified` / `local-only` / `server-only`
++  三态，方向（上传还是下载）留给后续 push/pull 决定
++- 被忽略文件（.gitignore + 默认规则）不参与 diff；输出按 path 排序，
++  两次结果可做位置对比
++- server 目录不存在**不算错误**（与 pull 不同）：此时 server 清单为空，
++  本地文件如实报告为 local-only——diff 只读，无需 pull 那样的防误删保护
++
++返回值三层：**退出码**（0=完全同步，1=有差异，2=错误）；
++**`--json`**（`{ inSync, files[{path,status,local,server}], summary }`）；
++**人类输出**（git-status 风格 `M/+/-` 加统计行）：
++
++```
++  M  src/server.js  local 12595B / server 12180B
++  +  notes.md  only in local
++  -  old.js  only in server
++
++1 modified, 1 local-only, 1 server-only, 20 in sync
++```
+ 
+ ## 六、核心流程
+ 
+diff --git a/README.md b/README.md
+index 6d3d28e..af30470 100644
+--- a/README.md
++++ b/README.md
+@@ -13,6 +13,9 @@ A minimal LAN file sync tool with optional remote command execution.
+ - Support for `.gitignore` patterns
+ - Safe file operations with path traversal protection
+ - Content-based sync with MD5 hash verification
++- `diff` command: read-only inventory comparison between local and server
++  (which files are modified / only on one side), with JSON output and
++  sync-state exit codes, so agents can script `diff && push`
+ - Windows ↔ macOS/Linux safe: canonical forward-slash paths on the wire, so
+   nested directories, patterns, and Unicode filenames survive sync in both
+   directions
+@@ -87,6 +90,13 @@ lansyncopt pull --no-delete
+ 
+ # Push without deleting remote files
+ lansyncopt push --no-delete
++
++# Check whether local and server are in sync - no transfer, no deletion.
++# Prints modified / local-only / server-only files; --json for agents.
++# Exit code: 0 = in sync, 1 = differs, 2 = error
++lansyncopt diff
++lansyncopt diff src
++lansyncopt diff --json
+ ```
+ 
+ ### Authentication
+diff --git a/docs/devlog-remote-exec.md b/docs/devlog-remote-exec.md
+index 817fdbc..eba5412 100644
+--- a/docs/devlog-remote-exec.md
++++ b/docs/devlog-remote-exec.md
+@@ -160,3 +160,20 @@ v1.2.0 之后两轮真实使用暴露的同步正确性问题,均为 fix 落地
+ ### 测试与验证
+ 
+ win32 语义模拟验证(嵌套修剪、root 边界、越界、跨盘符、UNC、混用分隔符、`..foo` 目录名)与集成/服务端测试全量通过(test/ 共 99+ 用例)。
++
++## diff 清单级对账(2026-09-30)
++
++双机实战中发现 pull/push 的输出只能间接回答「是不是同步了」(要靠 skipped 计数倒推),需要一个专门的对账命令。
++
++### 设计与实现
++
++1. **`lansyncopt diff [pattern] [--json]`**:清单级只读对账,一次 `/api/list` + 本地扫描,零协议改动。判定只用 hash,不复用 push/pull 的 mtime+size 快路径(避免「diff 说 modified、push 却说 skip」的自相矛盾);status 三态 `modified`/`local-only`/`server-only`,不偏向任一同步方向。
++2. **返回值三层**:退出码 0/1/2(同步/有差异/错误,对齐 `git diff --quiet` 习惯)便于脚本判定;`--json` 给 agent(`{inSync, files[{path,status,local,server}], summary}`,按 path 排序可做位置对比);人类输出 git-status 风格 `M/+/-`。`--json` 时 stdout 保证只有 JSON,进度信息走 stderr 或省略。
++3. **语义对齐 push/pull**:pattern 走同一套 `expandPattern`,遵守 .gitignore;server 目录不存在不报错(只读,如实报告 local-only,与 pull 的防误删拒绝不同)。
++4. `src/cli.js` 的 diff 失败路径统一 exit 2(未配置/网络/鉴权),不影响现有各命令的退出码语义。
++
++### 测试与验证
++
++`computeDiffInventory` 单测 6 例(hash-only、三态+meta、win32 路径归一、排序稳定性)+ 集成 4 例(pull 后 exit 0 且 inSync、三态同时出现时 exit 1 且 JSON 结构断言、pattern 作用域、未配置 exit 2);test/ 全量 121 用例通过。
++
++行级内容 diff(`--content`,单文件 LCS)列为下一步,本次未实现。
+diff --git a/src/cli.js b/src/cli.js
+index 465f08a..8f3ad0a 100644
+--- a/src/cli.js
++++ b/src/cli.js
+@@ -7,7 +7,7 @@ import readline from 'node:readline';
+ import { fileURLToPath } from 'node:url';
+ import { Writable } from 'node:stream';
+ import { startServerDaemon, stopServerDaemon, getServerStatus } from './server.js';
+-import { pull, push, checkServerReachable, verifyAuth, execRemote } from './client.js';
++import { pull, push, diff, checkServerReachable, verifyAuth, execRemote } from './client.js';
+ import { readClientConfig, writeClientConfig } from './config.js';
+ import { deriveToken, EXEC_POLICIES, DEFAULT_POLICY } from './policy.js';
+ 
+@@ -47,6 +47,9 @@ async function main() {
+       case 'exec':
+         await handleExecCommand(args.slice(1));
+         break;
++      case 'diff':
++        await handleDiffCommand(args.slice(1));
++        break;
+       case '--version':
+       case '-v':
+         console.log(`lansyncopt v${VERSION}`);
+@@ -79,6 +82,8 @@ Usage:
+   lansyncopt pull [pattern] [--no-delete]  Pull files from server
+   lansyncopt push [pattern] [--no-delete]  Push files to server
+   lansyncopt exec [--json] "<command>"  Execute remote command
++  lansyncopt diff [pattern] [--json]    Compare local with server without transferring
++                                        exit 0 = in sync, 1 = differs, 2 = error
+ 
+ All requests are authenticated with the password (Bearer token). The password is
+ set on the server at start and must match on the client at config time.
+@@ -96,6 +101,9 @@ Agent usage:
+ 
+   1. Sync with pull/push, never as exec side effects. Each pull/push transfers
+      diffs and lists changed files, so a call doubles as a diff check.
++     'lansyncopt diff [--json] [pattern]' checks sync state WITHOUT
++     transferring: exit 0 = in sync, 1 = differs. Use it to decide whether a
++     push/pull is needed.
+      Run 'git commit' on the local repo BEFORE syncing: the default pull/push
+      deletes files missing on the other side, uncommitted changes can be lost
+      (--no-delete disables deletion).
+@@ -390,6 +398,68 @@ async function handlePushCommand(subArgs) {
+   }
+ }
+ 
++async function handleDiffCommand(subArgs) {
++  const json = subArgs.includes('--json');
++  const pattern = subArgs.find(a => !a.startsWith('--'));
++
++  // diff 的一切失败(未配置/网络/鉴权/越界)都退出码 2,与「有差异」的 1 严格
++  // 区分:agent 用 $? 即可判定同步状态,无需解析文本
++  const fail = (message) => {
++    console.error(json ? JSON.stringify({ error: message }) : `Error: ${message}`);
++    process.exit(2);
++  };
++
++  const config = readClientConfig();
++  if (!config) {
++    fail('Client not configured. Run: lansyncopt client config <ip:port>');
++  }
++  if (!config.token) {
++    fail('Client has no password. Re-run: lansyncopt client config <ip:port>');
++  }
++
++  const { serverUrl, workDir, token } = config;
++  const currentDir = process.cwd();
++
++  if (!json) {
++    console.log(`Comparing local (${currentDir}) with server (${serverUrl})...`);
++  }
++
++  try {
++    const result = await diff({ serverUrl, workDir, currentDir, pattern, token });
++
++    if (json) {
++      console.log(JSON.stringify(result, null, 2));
++      process.exit(result.inSync ? 0 : 1);
++    }
++
++    if (result.prefix) {
++      console.log(`Scope: ${result.prefix}/`);
++    }
++    if (!result.serverDirExists) {
++      console.log(`(note: server has no directory "${result.prefix}" - every local file reports as local-only)`);
++    }
++
++    if (result.files.length === 0) {
++      console.log(`In sync (${result.summary.inSync} file${result.summary.inSync === 1 ? '' : 's'})`);
++      return;
++    }
++
++    const MARKS = { modified: 'M', 'local-only': '+', 'server-only': '-' };
++    for (const f of result.files) {
++      const detail = f.status === 'modified'
++        ? `local ${f.local.size}B / server ${f.server.size}B`
++        : (f.status === 'local-only' ? 'only in local' : 'only in server');
++      console.log(`  ${MARKS[f.status]}  ${f.path}  ${detail}`);
++    }
++
++    const s = result.summary;
++    console.log(`\n${s.modified} modified, ${s.localOnly} local-only, ${s.serverOnly} server-only, ${s.inSync} in sync`);
++    process.exit(1);
++  } catch (err) {
++    fail(err.message);
++  }
++}
++
+ async function handleExecCommand(subArgs) {
+   const config = readClientConfig();
+   if (!config) {
+diff --git a/src/client.js b/src/client.js
+index 88f7732..62988cf 100644
+--- a/src/client.js
++++ b/src/client.js
+@@ -392,6 +392,96 @@ export function computePullPlan(serverFiles, localFiles, noDelete) {
+   return { toDownload, toSkip, toDelete, keptCount };
+ }
+ 
++// 清单级 diff:只陈述「两边内容是否一致」,不偏向 push/pull 任何一方。
++// 判定只用 hash,不复用 push/pull 的 mtime+size 快路径——diff 是给「确认是否
++// 同步」用的事实报告,若走快路径会出现「diff 说 modified、push 却说 skip」
++// 的自相矛盾。status 三态:modified / local-only / server-only;
++// 两边一致的文件不进 files,只计入 summary.inSync。
++function diffMeta(f) {
++  return { size: f.size, mtime: f.mtime, hash: f.hash };
++}
++
++export function computeDiffInventory(localFiles, serverFiles) {
++  const localMap = new Map(localFiles.map(f => [normalizePath(f.path), f]));
++  const serverMap = new Map(serverFiles.map(f => [normalizePath(f.path), f]));
++
++  const files = [];
++  let inSyncCount = 0;
++
++  for (const [key, local] of localMap) {
++    const server = serverMap.get(key);
++    if (!server) {
++      files.push({ path: key, status: 'local-only', local: diffMeta(local), server: null });
++      continue;
++    }
++    serverMap.delete(key);
++    if (local.hash === server.hash) {
++      inSyncCount++;
++    } else {
++      files.push({ path: key, status: 'modified', local: diffMeta(local), server: diffMeta(server) });
++    }
++  }
++
++  for (const [key, server] of serverMap) {
++    files.push({ path: key, status: 'server-only', local: null, server: diffMeta(server) });
++  }
++
++  // 按路径排序:两次 diff 的输出可做位置对比(agent 消费场景)
++  files.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
++
++  return {
++    inSync: files.length === 0,
++    files,
++    summary: {
++      modified: files.filter(f => f.status === 'modified').length,
++      localOnly: files.filter(f => f.status === 'local-only').length,
++      serverOnly: files.filter(f => f.status === 'server-only').length,
++      inSync: inSyncCount
++    }
++  };
++}
++
++// 清单级 diff 的一次编排:一次 /api/list + 本地扫描,零协议改动,只读不传输。
++// server 目录不存在不算错误(与 pull 的拒绝语义不同):diff 是只读的事实报告,
++// 此时 server 侧清单为空,本地文件如实报告为 local-only。
++export async function diff({ serverUrl, workDir, currentDir, pattern, token }) {
++  const validation = validateWorkDir(currentDir, workDir);
++  if (!validation.valid) {
++    throw new Error(`${validation.error}\nCurrent directory: ${validation.currentDir}`);
++  }
++
++  // win32 上 path.relative 产出反斜杠前缀,统一为 `/`(server 端按正斜杠解析)
++  const pathPrefix = normalizePath(validation.pathPrefix);
++  const ignoreRules = loadIgnoreRules(workDir);
++
++  // Expand pattern for directory matching
++  const expandedPattern = expandPattern(pattern);
++
++  const listing = await fetchFileList(serverUrl, pathPrefix, token);
++  let serverFiles = mapServerFiles(listing.files, pathPrefix);
++
++  if (expandedPattern) {
++    serverFiles = serverFiles.filter(f => minimatch(f.path, expandedPattern, { dot: true }));
++  }
++
++  let localFiles = scanLocalFiles(currentDir, ignoreRules);
++  // win32 上扫描结果是反斜杠路径:统一为 `/`,与 server 侧一致
++  localFiles = localFiles.map(f => ({ ...f, path: normalizePath(f.path) }));
++
++  if (expandedPattern) {
++    localFiles = localFiles.filter(f => minimatch(f.path, expandedPattern, { dot: true }));
++  }
++
++  const inventory = computeDiffInventory(localFiles, serverFiles);
++
++  return {
++    ...inventory,
++    localRoot: currentDir,
++    prefix: pathPrefix,
++    serverDirExists: listing.exists
++  };
++}
++
+ export function computePushPlan(localFiles, serverFiles, noDelete) {
+   const toUpload = [];
+   const toSkip = [];
+diff --git a/test/test-client.js b/test/test-client.js
+index a8547b5..cdb8149 100644
+--- a/test/test-client.js
++++ b/test/test-client.js
+@@ -5,7 +5,7 @@ import fs from 'node:fs';
+ import path from 'node:path';
+ import os from 'node:os';
+ import http from 'node:http';
+-import { fetchFileList, fetchFile, uploadFile, deleteFile, checkServerReachable, verifyAuth, scanLocalFiles, computePullPlan, computePushPlan, validateWorkDir, pull, push } from '../src/client.js';
++import { fetchFileList, fetchFile, uploadFile, deleteFile, checkServerReachable, verifyAuth, scanLocalFiles, computePullPlan, computePushPlan, computeDiffInventory, validateWorkDir, pull, push } from '../src/client.js';
+ import { writeServerConfig, readClientConfig } from '../src/config.js';
+ 
+ describe('client HTTP functions', () => {
+@@ -607,4 +607,92 @@ describe('cross-platform path handling (win32 wire shapes)', () => {
+     );
+     assert.ok(fs.existsSync(path.join(tmpDir, 'keep.txt')));
+   });
+-});
+\ No newline at end of file
++});
++describe('computeDiffInventory', () => {
++  const meta = (hash, size, mtime) => ({ size, mtime, hash });
++  const localFile = (path, hash, size, mtime) => ({ path, hash, size, mtime });
++  const serverFile = (path, hash, size, mtime) => ({ path, hash, size, mtime });
++
++  it('is in sync with empty summary when both sides match exactly', () => {
++    const result = computeDiffInventory(
++      [localFile('a.js', 'h1', 10, 100)],
++      [serverFile('a.js', 'h1', 10, 100)]
++    );
++
++    assert.strictEqual(result.inSync, true);
++    assert.deepStrictEqual(result.files, []);
++    assert.deepStrictEqual(result.summary, { modified: 0, localOnly: 0, serverOnly: 0, inSync: 1 });
++  });
++
++  it('judges by hash only: equal hash with different mtime/size is still in sync', () => {
++    // push/pull 有 mtime+size 快路径;diff 必须只认内容(hash),
++    // 避免「diff 说 modified、push 却说 skip」的自相矛盾
++    const result = computeDiffInventory(
++      [localFile('a.js', 'h1', 10, 100)],
++      [serverFile('a.js', 'h1', 88, 999)]
++    );
++
++    assert.strictEqual(result.inSync, true);
++  });
++
++  it('reports inSync=false immediately in top-level bool', () => {
++    const result = computeDiffInventory(
++      [localFile('a.js', 'h1', 10, 100)],
++      [serverFile('a.js', 'h2', 10, 100)]
++    );
++
++    assert.strictEqual(result.inSync, false);
++    assert.strictEqual(result.files.length, 1);
++    assert.strictEqual(result.summary.modified, 1);
++  });
++
++  it('classifies modified / local-only / server-only and keeps side meta', () => {
++    const result = computeDiffInventory(
++      [
++        localFile('modified.js', 'L1', 120, 1000),
++        localFile('onlylocal.txt', 'L2', 4, 1000)
++      ],
++      [
++        serverFile('modified.js', 'S1', 80, 2000),
++        serverFile('onlyserver.js', 'S3', 210, 2000)
++      ]
++    );
++
++    assert.deepStrictEqual(result.files.map(f => f.path), ['modified.js', 'onlylocal.txt', 'onlyserver.js']);
++    assert.deepStrictEqual(result.files.map(f => f.status), ['modified', 'local-only', 'server-only']);
++
++    const modified = result.files.find(f => f.status === 'modified');
++    assert.deepStrictEqual(modified.local, meta('L1', 120, 1000));
++    assert.deepStrictEqual(modified.server, meta('S1', 80, 2000));
++
++    const onlyLocal = result.files.find(f => f.status === 'local-only');
++    assert.deepStrictEqual(onlyLocal.local, meta('L2', 4, 1000));
++    assert.strictEqual(onlyLocal.server, null);
++
++    const onlyServer = result.files.find(f => f.status === 'server-only');
++    assert.strictEqual(onlyServer.local, null);
++    assert.deepStrictEqual(onlyServer.server, meta('S3', 210, 2000));
++  });
++
++  it('normalizes win32 backslash paths before comparing', () => {
++    const result = computeDiffInventory(
++      [localFile('src\\cli.js', 'h1', 10, 100)],
++      [serverFile('src/cli.js', 'h1', 10, 100)]
++    );
++
++    assert.strictEqual(result.inSync, true);
++    assert.strictEqual(result.summary.inSync, 1);
++  });
++
++  it('sorts output by path for stable positional comparison', () => {
++    const result = computeDiffInventory(
++      [
++        localFile('z.txt', 'L', 1, 1),
++        localFile('a.txt', 'L2', 1, 1)
++      ],
++      [serverFile('m.txt', 'S', 1, 1)]
++    );
++
++    assert.deepStrictEqual(result.files.map(f => f.path), ['a.txt', 'm.txt', 'z.txt']);
++  });
++});
+diff --git a/test/test-integration.js b/test/test-integration.js
+index c2a04a2..15ccfa3 100644
+--- a/test/test-integration.js
++++ b/test/test-integration.js
+@@ -107,9 +107,69 @@ describe('integration', () => {
+     // server 根上的无关文件不受影响
+     assert.ok(fs.existsSync(path.join(serverDir, 'readme.md')));
+   });
++
++  it('diff exits 0 and reports in sync after pull', async () => {
++    await runCli(['client', 'config', serverUrl.replace('http://', '')], clientDir);
++    await runCli(['pull'], clientDir);
++
++    const { code, stdout } = await runCliCapture(['diff', '--json'], clientDir);
++
++    assert.strictEqual(code, 0);
++    const result = JSON.parse(stdout);
++    assert.strictEqual(result.inSync, true);
++    assert.deepStrictEqual(result.files, []);
++    assert.strictEqual(result.summary.inSync, 3);
++  });
++
++  it('diff exits 1 and flags modified / local-only / server-only', async () => {
++    await runCli(['client', 'config', serverUrl.replace('http://', '')], clientDir);
++    await runCli(['pull'], clientDir);
++
++    // 三种差异各造一个:本地改内容 / 本地新增 / 本地删除
++    fs.writeFileSync(path.join(clientDir, 'readme.md'), '# Changed locally');
++    fs.writeFileSync(path.join(clientDir, 'extra.txt'), 'extra');
++    fs.rmSync(path.join(clientDir, 'src', 'index.js'));
++
++    const { code, stdout } = await runCliCapture(['diff', '--json'], clientDir);
++
++    assert.strictEqual(code, 1);
++    const result = JSON.parse(stdout);
++    assert.strictEqual(result.inSync, false);
++
++    const byPath = Object.fromEntries(result.files.map(f => [f.path, f]));
++    assert.strictEqual(byPath['readme.md'].status, 'modified');
++    assert.ok(byPath['readme.md'].local.hash !== byPath['readme.md'].server.hash);
++    assert.strictEqual(byPath['extra.txt'].status, 'local-only');
++    assert.strictEqual(byPath['src/index.js'].status, 'server-only');
++
++    assert.deepStrictEqual(result.summary, { modified: 1, localOnly: 1, serverOnly: 1, inSync: 1 });
++  });
++
++  it('diff honors pattern scope', async () => {
++    await runCli(['client', 'config', serverUrl.replace('http://', '')], clientDir);
++    await runCli(['pull'], clientDir);
++    fs.rmSync(path.join(clientDir, 'src', 'index.js'));
++
++    const { code, stdout } = await runCliCapture(['diff', 'src', '--json'], clientDir);
++
++    assert.strictEqual(code, 1);
++    const result = JSON.parse(stdout);
++    assert.deepStrictEqual(result.files.map(f => f.path), ['src/index.js']);
++    assert.strictEqual(result.prefix, '');
++  });
++
++  it('diff exits 2 when client is not configured', async () => {
++    // 指向一个全新配置目录,让 client 处于未配置状态
++    configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lansyncopt-config-'));
++
++    const { code, stderr } = await runCliCapture(['diff'], clientDir);
++
++    assert.strictEqual(code, 2);
++    assert.ok(stderr.includes('not configured'));
++  });
+ });
+ 
+-function runCli(args, cwd) {
++function runCliCapture(args, cwd) {
+   return new Promise((resolve, reject) => {
+     const cliPath = path.join(process.cwd(), 'bin', 'lansync.js');
+     const proc = spawn('node', [cliPath, ...args], {
+@@ -132,11 +192,15 @@ function runCli(args, cwd) {
+     proc.on('error', err => reject(err));
+ 
+     proc.on('close', code => {
+-      if (code === 0) {
+-        resolve(stdout);
+-      } else {
+-        reject(new Error(`CLI failed: ${stderr || stdout}`));
+-      }
++      resolve({ code, stdout, stderr });
+     });
+   });
+ }
++
++async function runCli(args, cwd) {
++  const { code, stdout, stderr } = await runCliCapture(args, cwd);
++  if (code !== 0) {
++    throw new Error(`CLI failed (exit ${code}): ${stderr || stdout}`);
++  }
++  return stdout;
++}
+-- 
+2.39.3 (Apple Git-146)
+

@@ -1,0 +1,43 @@
+From dab166a2a224efc40090cd6d69da0c961f7b0fea Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=E6=B2=90=E9=AA=81?= <lihantian.lht@antgroup.com>
+Date: Wed, 30 Sep 2026 02:31:31 +0800
+Subject: [PATCH] fix(tests): platform-neutral sanitizePath expectations
+ (win32)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Hardcoded POSIX absolute '/tmp/project/...' failed on Windows where
+path.resolve lands on the current drive (D:\tmp\project\...). Build
+expectations with path.resolve(rootDir, ...) instead — that is exactly
+the contract sanitizePath implements.
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+---
+ test/test-server.js | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/test/test-server.js b/test/test-server.js
+index ee0aae8..1c89406 100644
+--- a/test/test-server.js
++++ b/test/test-server.js
+@@ -19,12 +19,14 @@ describe('server utilities', () => {
+ 
+     it('returns absolute path for valid relative path', () => {
+       const result = sanitizePath('src/index.js', rootDir);
+-      assert.strictEqual(result, '/tmp/project/src/index.js');
++      // 期望值用 path.resolve 构造:sanitizePath 的契约就是 resolve 后仍在
++      // rootDir 内,硬编码 POSIX 绝对路径在 Windows 上必然失败(D:\tmp\...)
++      assert.strictEqual(result, path.resolve(rootDir, 'src/index.js'));
+     });
+ 
+     it('handles URL encoded paths', () => {
+       const result = sanitizePath('src%20files/test.js', rootDir);
+-      assert.strictEqual(result, '/tmp/project/src files/test.js');
++      assert.strictEqual(result, path.resolve(rootDir, 'src files/test.js'));
+     });
+ 
+     it('returns null for path traversal attack', () => {
+-- 
+2.39.3 (Apple Git-146)
+

@@ -1,0 +1,381 @@
+From cc79dc86a60e3b6f60b7d7c065b0c3cf10f37946 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=E6=B2=90=E9=AA=81?= <lihantian.lht@antgroup.com>
+Date: Wed, 30 Sep 2026 02:30:23 +0800
+Subject: [PATCH] feat: server stop verifies port truth, kills orphans on
+ confirm (v1.4.0)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+stopServerDaemon trusts only the pid in server.json, so orphan daemons
+(killed half-starts, lost configs) could never be stopped and stop
+would report success while the port stayed occupied — today's 401
+incident class. stop now re-checks DEFAULT_PORT after stopping: show
+the owner PID + command name, ask Y/N to kill, -y to skip the ask.
+Non-TTY stdin is treated as N so agents never hang. Port lookup uses
+netstat (win32) / lsof (POSIX); kill is taskkill /F on win32 and
+SIGTERM→SIGKILL on POSIX.
+
+killPidHard is async on purpose: the first sync-sleep version kept
+hitting zombies (libuv never got an event-loop turn to reap after
+SIGCHLD), misreporting live targets as alive.
+
+Version 1.3.0→1.4.0. Note: installed CLI copies (setup.sh/npm) need a
+reinstall to pick this up.
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+---
+ DESIGN.md                  |  3 +-
+ README.md                  |  6 ++-
+ docs/devlog-remote-exec.md | 19 ++++++++++
+ package.json               |  2 +-
+ src/cli.js                 | 60 ++++++++++++++++++++++++++++--
+ src/server.js              | 75 +++++++++++++++++++++++++++++++++++++-
+ test/test-server.js        | 61 ++++++++++++++++++++++++++++++-
+ 7 files changed, 216 insertions(+), 10 deletions(-)
+
+diff --git a/DESIGN.md b/DESIGN.md
+index c354778..c8c2602 100644
+--- a/DESIGN.md
++++ b/DESIGN.md
+@@ -149,7 +149,8 @@ function sanitizePath(requestedPath, rootDir) {
+ 
+ ```bash
+ lansync server start              # 启动后台服务，返回 IP:port
+-lansync server stop               # 停止服务
++lansync server stop [-y]          # 停止服务;stop 后核对端口真相,发现孤儿占用
++                                  # 则展示 PID 并交互确认硬杀(非 TTY 默认不动)
+ lansync server status             # 输出 IP:port、根目录、运行状态
+ ```
+ 
+diff --git a/README.md b/README.md
+index af30470..d5c48aa 100644
+--- a/README.md
++++ b/README.md
+@@ -66,8 +66,12 @@ npm unlink -g lansyncopt
+ lansyncopt server start
+ lansyncopt server start --policy exec-block-black
+ 
+-# Stop server
++# Stop server. stop verifies the port afterwards: if an orphan process still
++# holds it (lost config / killed half-start), it shows the owner PID and asks
++# to kill it interactively; -y kills without asking (agent-safe: non-TTY
++# stdin never blocks and defaults to "leave it running")
+ lansyncopt server stop
++lansyncopt server stop -y
+ 
+ # Check server status
+ lansyncopt server status
+diff --git a/docs/devlog-remote-exec.md b/docs/devlog-remote-exec.md
+index cb4ebf7..cb81fc6 100644
+--- a/docs/devlog-remote-exec.md
++++ b/docs/devlog-remote-exec.md
+@@ -197,3 +197,22 @@ win32 语义模拟验证(嵌套修剪、root 边界、越界、跨盘符、UNC
+ ### 遗留(见任务 #5)
+ 
+ stopServerDaemon 仍只信配置文件里的 pid:杀失败不校验端口、报成功、删配置。孤儿 daemon(强杀/半途 start 产生)依旧杀不掉——需在 stop 后校验 isPortInUse 并报真实占用者;status 应双重校验(pid 存活+端口占用)。
++
++## v1.4.0(2026-09-30):server stop 端口真相 + 孤儿硬杀
++
++承接上节事故:stopServerDaemon 只信 server.json 里的 pid,孤儿 daemon(半途 start 被端口拒绝但自己删配置、强杀断管、配置丢失脱管)永远杀不掉,且 stop 会把「杀错目标还删配置」包装成成功。本版把 stop 的语义从「按配置办事」升级为「以端口真相为准」。
++
++### 设计
++
++1. **stop 后核对端口**:kill 配置 pid(或无配置)之后,再查 DEFAULT_PORT(8001)是否仍被 LISTEN 占用。空闲 → 正常结束报 stopped/No server running;被占 → 展示占用者 PID+进程名,交互确认 `Kill PID n? [y/N]`,Y/-y 才硬杀,杀完复核端口并如实汇报。
++2. **查占用者跨平台**:win32 `netstat -ano` 解析 LISTENING 行;POSIX `lsof -t -i:<port> -sTCP:LISTEN`。查不到(lsof 缺席)退化 null,只提示人工处理,绝不盲杀。
++3. **杀进程硬保证**:win32 `taskkill /PID n /F`;POSIX SIGTERM → 让出事件循环 300ms → 仍活则 SIGKILL。**async 是必须的**:第一版用 Atomics.wait 同步睡眠,libuv 没机会收 SIGCHLD、收割僵尸,kill(pid,0) 持续命中 zombie,把已死误判为存活(SIGKILL 对 zombie 返回 0,无法补救)——本地三分实验复现后改为 await。
++4. **非交互安全**:stdin 非 TTY 时确认提示直接视作 N(agent/exec 场景不悬死),并提示可加 `-y`;新占用者可能是别的程序,展示身份给用户确认,不做自动归属判断。
++
++### 测试
++
++getPortOwnerPid 听本地端口返回自身 pid / 空闲端口返回 null;getPidCommand 取名;killPidHard 杀真实子进程并断言 pid 消失、对已死 pid 返回 true。全量 126 用例通过。人工冒烟:非 TTY 下 stop 正确识别 8001 占用并保持不动,-y 一击kill 且端口清空。
++
++### 部署注意
++
++版本 1.3.0→1.4.0。setup.sh/npm 链接安装的副本不会随仓库同步自动更新——**代码 push 到机器后需要重跑安装才能让该机的 `lansyncopt` 命令携带新功能**,正在运行的 server daemonρέ也需重启。
+diff --git a/package.json b/package.json
+index 2188826..fa5f0ac 100644
+--- a/package.json
++++ b/package.json
+@@ -1,6 +1,6 @@
+ {
+   "name": "lansyncopt",
+-  "version": "1.3.0",
++  "version": "1.4.0",
+   "description": "Minimal LAN file sync tool (remote-exec branch)",
+   "type": "module",
+   "bin": {
+diff --git a/src/cli.js b/src/cli.js
+index 8f3ad0a..d893136 100644
+--- a/src/cli.js
++++ b/src/cli.js
+@@ -6,7 +6,7 @@ import fs from 'node:fs';
+ import readline from 'node:readline';
+ import { fileURLToPath } from 'node:url';
+ import { Writable } from 'node:stream';
+-import { startServerDaemon, stopServerDaemon, getServerStatus } from './server.js';
++import { startServerDaemon, stopServerDaemon, getServerStatus, getPortOwnerPid, getPidCommand, killPidHard, DEFAULT_PORT } from './server.js';
+ import { pull, push, diff, checkServerReachable, verifyAuth, execRemote } from './client.js';
+ import { readClientConfig, writeClientConfig } from './config.js';
+ import { deriveToken, EXEC_POLICIES, DEFAULT_POLICY } from './policy.js';
+@@ -75,7 +75,9 @@ lansyncopt - LAN file sync tool (remote-exec)
+ 
+ Usage:
+   lansyncopt server start [--port <n>] [--policy <m>]  Start server daemon (prompts for password)
+-  lansyncopt server stop                Stop server daemon
++  lansyncopt server stop [-y]           Stop server daemon; if the port is still
++                                        held by an orphan process, show the owner
++                                        and ask to kill it (Y = kill, -y = no ask)
+   lansyncopt server status              Show server status
+   lansyncopt client config <ip:port>    Configure server address + password (verified against server)
+   lansyncopt client status              Show client config
+@@ -148,11 +150,47 @@ async function handleServerCommand(subArgs) {
+       break;
+     }
+     case 'stop': {
++      const force = subArgs.includes('-y') || subArgs.includes('--yes');
+       const stopped = stopServerDaemon();
+       if (stopped) {
+         console.log('Server stopped.');
++      }
++
++      // 端口真相核查:孤儿 daemon(强杀/半途 start/配置丢失)不经配置文件管理,
++      // 「stop 不报错」不等于端口已释放。发现占用 → 展示占用者 → 交互确认硬杀
++      const ownerPid = getPortOwnerPid(DEFAULT_PORT);
++      if (!ownerPid) {
++        if (!stopped) console.log('No server running.');
++        break;
++      }
++
++      const ownerCmd = getPidCommand(ownerPid);
++      if (stopped) {
++        console.log(`Warning: port ${DEFAULT_PORT} is still occupied by PID ${ownerPid}${ownerCmd ? ` (${ownerCmd})` : ''}`);
+       } else {
+-        console.log('No server running.');
++        console.log(`No server running, but port ${DEFAULT_PORT} is occupied:`);
++        console.log(`  PID ${ownerPid}${ownerCmd ? `  ${ownerCmd}` : ''}`);
++      }
++
++      let confirmed = force;
++      if (!confirmed) {
++        const answer = await askYesNo(`Kill PID ${ownerPid} to free port ${DEFAULT_PORT}? [y/N]: `);
++        confirmed = /^y(es)?$/i.test(answer.trim());
++      }
++
++      if (!confirmed) {
++        console.log('Left it running. Re-run with -y to kill without asking.');
++        break;
++      }
++
++      if (killPidHard(ownerPid)) {
++        const still = getPortOwnerPid(DEFAULT_PORT);
++        console.log(still
++          ? `Killed PID ${ownerPid}, but port ${DEFAULT_PORT} is STILL occupied by PID ${still}.`
++          : `Killed PID ${ownerPid}. Port ${DEFAULT_PORT} is free.`);
++      } else {
++        console.error(`Failed to kill PID ${ownerPid}. Kill it manually: taskkill /PID ${ownerPid} /F (Windows) or kill -9 ${ownerPid}.`);
++        process.exit(1);
+       }
+       break;
+     }
+@@ -490,6 +528,22 @@ async function handleExecCommand(subArgs) {
+   process.exit(result.exitCode ?? 0);
+ }
+ 
++// 非交互(stdin 非 TTY)直接视作否:agent/exec 场景不能挂起干等输入
++function askYesNo(promptText) {
++  return new Promise(resolve => {
++    if (!process.stdin.isTTY) {
++      resolve('');
++      return;
++    }
++    process.stdout.write(promptText);
++    const rl = readline.createInterface({ input: process.stdin, terminal: false });
++    rl.once('line', line => {
++      rl.close();
++      resolve(line);
++    });
++  });
++}
++
+ // 读取口令:优先环境变量 LANSNC_PASSWORD(agent 场景),否则交互式隐藏回显
+ function promptPassword(promptText) {
+   return new Promise((resolve) => {
+diff --git a/src/server.js b/src/server.js
+index fd88891..1806e62 100644
+--- a/src/server.js
++++ b/src/server.js
+@@ -5,13 +5,13 @@ import fs from 'node:fs';
+ import http from 'node:http';
+ import net from 'node:net';
+ import crypto from 'node:crypto';
+-import { spawn } from 'node:child_process';
++import { spawn, spawnSync } from 'node:child_process';
+ import { fileURLToPath } from 'node:url';
+ import { minimatch } from 'minimatch';
+ import { readServerConfig, writeServerConfig, getConfigDir } from './config.js';
+ import { checkPolicy, detectSelfReference, DEFAULT_POLICY, DEFAULT_BLACKLIST, DEFAULT_GRAYLIST } from './policy.js';
+ 
+-const DEFAULT_PORT = 8001;
++export const DEFAULT_PORT = 8001;
+ const DEFAULT_MAX_CONCURRENT = 4;
+ let activeExecs = 0;
+ 
+@@ -567,6 +567,77 @@ export async function isPortInUse(port) {
+   });
+ }
+ 
++// ---- 孤儿 daemon 处置(见 devlog 2026-09-30 事故)--------------------------
++// stopServerDaemon 只信 server.json 里的 pid,孤儿(半途 start/强杀/配置丢失
++// 脱管)永远杀不掉。这里给 cli 一套「端口真相」工具:谁是占用者、怎么硬杀。
++
++function pidAlive(pid) {
++  try {
++    process.kill(pid, 0);
++    return true;
++  } catch {
++    return false;
++  }
++}
++
++// 查询 LISTEN 在指定端口上的进程 pid。无跨平台 API,netstat/lsof 各走一条;
++// 查不到(lsof 缺席、解析失败)返回 null,由调用方退化为人工提示
++export function getPortOwnerPid(port) {
++  if (process.platform === 'win32') {
++    const out = spawnSync('netstat', ['-ano'], { encoding: 'utf8', windowsHide: true });
++    if (out.status !== 0 || !out.stdout) return null;
++    // TCP    0.0.0.0:8001    0.0.0.0:0    LISTENING    12345
++    for (const line of out.stdout.split('\n')) {
++      const cols = line.trim().split(/\s+/);
++      if (cols.length >= 5 && cols[3] === 'LISTENING' && cols[1].endsWith(`:${port}`)) {
++        return parseInt(cols[4], 10) || null;
++      }
++    }
++    return null;
++  }
++  const out = spawnSync('lsof', ['-t', `-i:${port}`, '-sTCP:LISTEN'], { encoding: 'utf8' });
++  if (out.status !== 0 || !out.stdout) return null;
++  return parseInt(out.stdout.trim().split('\n')[0], 10) || null;
++}
++
++// 展示占用者身份(不拦截、不判断归属):Windows tasklist 取映像名,POSIX ps 取 comm
++export function getPidCommand(pid) {
++  if (process.platform === 'win32') {
++    const out = spawnSync('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'], { encoding: 'utf8', windowsHide: true });
++    const line = (out.stdout || '').split('\n').find(l => l.trim().startsWith('"'));
++    if (!line) return null;
++    const first = line.match(/"([^"]*)"/g);
++    return first && first[0] ? first[0].slice(1, -1) : null;
++  }
++  const out = spawnSync('ps', ['-p', String(pid), '-o', 'comm='], { encoding: 'utf8' });
++  return out.status === 0 && out.stdout.trim() ? out.stdout.trim() : null;
++}
++
++// 不经配置文件的硬杀:win32 直接 taskkill /F;POSIX 先 SIGTERM,宽限后仍在则补
++// SIGKILL。最终以「进程是否已不存在」为准,不吞错——占用者可能不是我们的
++// daemon,调用方应先把身份展示给用户确认。
++// async + 让出事件循环是必须的:若用同步睡眠,libuv 没机会处理 SIGCHLD、
++// 收割僵尸进程,kill(pid,0) 会一直命中 zombie,把「已死」误判成「仍存活」
++export async function killPidHard(pid) {
++  try {
++    if (process.platform === 'win32') {
++      spawnSync('taskkill', ['/PID', String(pid), '/F'], { windowsHide: true });
++    } else {
++      process.kill(pid, 'SIGTERM');
++    }
++  } catch {
++    // pid 不存在(ESRCH)也算达成目的,由结尾的存在性检查统一判定
++  }
++  if (process.platform !== 'win32') {
++    await new Promise(resolve => setTimeout(resolve, 300));
++    if (pidAlive(pid)) {
++      try { process.kill(pid, 'SIGKILL'); } catch {}
++      await new Promise(resolve => setTimeout(resolve, 200));
++    }
++  }
++  return !pidAlive(pid);
++}
++
+ export async function startServerDaemon(rootDir, port = DEFAULT_PORT, token, policy = DEFAULT_POLICY) {
+   if (await isPortInUse(port)) {
+     // 只拒绝、不杀:占用者可能是旧 lansync server 或其他应用,不能自动 kill。
+diff --git a/test/test-server.js b/test/test-server.js
+index 6effacd..ee0aae8 100644
+--- a/test/test-server.js
++++ b/test/test-server.js
+@@ -6,7 +6,7 @@ import path from 'node:path';
+ import os from 'node:os';
+ import http from 'node:http';
+ import { spawn } from 'node:child_process';
+-import { sanitizePath, getLocalIP, parseGitignore, shouldIgnore, getDefaultIgnoreRules, walkDir, pruneEmptyDirs, createServer, isPortInUse, startServerDaemon, stopServerDaemon, getServerStatus } from '../src/server.js';
++import { sanitizePath, getLocalIP, parseGitignore, shouldIgnore, getDefaultIgnoreRules, walkDir, pruneEmptyDirs, createServer, isPortInUse, startServerDaemon, stopServerDaemon, getServerStatus, getPortOwnerPid, getPidCommand, killPidHard } from '../src/server.js';
+ import { writeServerConfig, getConfigDir } from '../src/config.js';
+ import { deriveToken } from '../src/policy.js';
+ 
+@@ -426,4 +426,61 @@ describe('daemon management', () => {
+       assert.strictEqual(status.status, 'stopped');
+     });
+   });
+-});
+\ No newline at end of file
++});
++describe('orphan daemon handling (getPortOwnerPid / killPidHard)', () => {
++  it('getPortOwnerPid returns the listening process pid', async () => {
++    const holder = http.createServer();
++    await new Promise(resolve => holder.listen(0, resolve));
++    const port = holder.address().port;
++
++    try {
++      assert.strictEqual(getPortOwnerPid(port), process.pid);
++    } finally {
++      await new Promise(resolve => holder.close(resolve));
++    }
++  });
++
++  it('getPortOwnerPid returns null for a free port', async () => {
++    const other = http.createServer();
++    await new Promise(resolve => other.listen(0, resolve));
++    const freePort = other.address().port;
++    await new Promise(resolve => other.close(resolve));
++
++    assert.strictEqual(getPortOwnerPid(freePort), null);
++  });
++
++  it('getPidCommand identifies a pid', () => {
++    const cmd = getPidCommand(process.pid);
++    assert.ok(cmd, 'expected a non-empty command name for the test process');
++  });
++
++  it('killPidHard kills a spawned child and reports success', async () => {
++    const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
++      stdio: 'ignore'
++    });
++    // 等 child 真正起来
++    await new Promise(resolve => setTimeout(resolve, 300));
++
++    assert.ok(await killPidHard(child.pid), 'killPidHard should report success');
++
++    // 让出事件循环后 pid 应彻底消失(僵尸已被收割)
++    const alive = await new Promise(resolve => {
++      try {
++        process.kill(child.pid, 0);
++        resolve(true);
++      } catch {
++        resolve(false);
++      }
++    });
++    assert.strictEqual(alive, false);
++  }, 10000);
++
++  it('killPidHard returns true for an already-dead pid (ESRCH = goal achieved)', async () => {
++    const dead = spawn(process.execPath, ['-e', 'process.exit(0)'], { stdio: 'ignore' });
++    await new Promise(resolve => dead.once('exit', resolve));
++    // 再让出几轮事件循环,确保 zombie 收割、pid 释放
++    await new Promise(resolve => setTimeout(resolve, 100));
++
++    assert.strictEqual(await killPidHard(dead.pid), true);
++  }, 10000);
++});
+-- 
+2.39.3 (Apple Git-146)
+

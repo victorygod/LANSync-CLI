@@ -1,0 +1,1641 @@
+[AUDIT] fs.writeFileSync pid=73106 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-test-config-lqd4CY/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-config.js:74:7)
+    at Test.runInAsyncScope (node:async_hooks:214:14)
+    at Test.run (node:internal/test_runner/test:1047:25)
+    at async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+---
+[AUDIT] fs.writeFileSync pid=73106 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-test-config-Es1pNO/client.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeClientConfig (file:///Users/wolf/Desktop/lansync/src/config.js:49:6)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-config.js:88:7)
+    at Test.runInAsyncScope (node:async_hooks:214:14)
+    at Test.run (node:internal/test_runner/test:1047:25)
+    at async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+---
+[AUDIT] fs.writeFileSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-bEB0ib/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-exec.js:43:5)
+    at TestHook.runInAsyncScope (node:async_hooks:214:14)
+    at TestHook.run (node:internal/test_runner/test:1047:25)
+    at TestHook.run (node:internal/test_runner/test:1354:18)
+    at Suite.runHook (node:internal/test_runner/test:965:20)
+    at Test.run (node:internal/test_runner/test:1022:27)
+---
+[AUDIT] fs.writeFileSync pid=73110 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-sYodiy/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-server.js:239:5)
+    at TestHook.runInAsyncScope (node:async_hooks:214:14)
+    at TestHook.run (node:internal/test_runner/test:1047:25)
+    at TestHook.run (node:internal/test_runner/test:1354:18)
+    at Suite.runHook (node:internal/test_runner/test:965:20)
+    at Test.run (node:internal/test_runner/test:1022:27)
+---
+[AUDIT] fs.appendFileSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-bEB0ib/server.log
+    at fs.<computed> [as appendFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at log (file:///Users/wolf/Desktop/lansync/src/server.js:29:8)
+    at Server.<anonymous> (file:///Users/wolf/Desktop/lansync/src/server.js:398:9)
+    at Server.emit (node:events:519:28)
+    at parserOnIncoming (node:_http_server:1186:12)
+    at HTTPParser.parserOnHeadersComplete (node:_http_common:122:17)
+---
+[AUDIT] fs.writeFileSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-bEB0ib/server.log
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at Object.appendFileSync (node:fs:2519:6)
+    at fs.<computed> [as appendFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:18:17)
+    at log (file:///Users/wolf/Desktop/lansync/src/server.js:29:8)
+    at Server.<anonymous> (file:///Users/wolf/Desktop/lansync/src/server.js:398:9)
+    at Server.emit (node:events:519:28)
+    at parserOnIncoming (node:_http_server:1186:12)
+    at HTTPParser.parserOnHeadersComplete (node:_http_common:122:17)
+---
+[AUDIT] fs.unlinkSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-bEB0ib/server.json
+    at fs.<computed> (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at _unlinkSync (node:internal/fs/rimraf:215:14)
+    at rimrafSync (node:internal/fs/rimraf:196:7)
+    at node:internal/fs/rimraf:254:9
+    at Array.forEach (<anonymous>)
+    at _rmdirSync (node:internal/fs/rimraf:251:7)
+    at rimrafSync (node:internal/fs/rimraf:194:7)
+    at Object.rmSync (node:fs:1246:10)
+---
+[AUDIT] fs.unlinkSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-bEB0ib/server.log
+    at fs.<computed> (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at _unlinkSync (node:internal/fs/rimraf:215:14)
+    at rimrafSync (node:internal/fs/rimraf:196:7)
+    at node:internal/fs/rimraf:254:9
+    at Array.forEach (<anonymous>)
+    at _rmdirSync (node:internal/fs/rimraf:251:7)
+    at rimrafSync (node:internal/fs/rimraf:194:7)
+    at Object.rmSync (node:fs:1246:10)
+---
+[AUDIT] fs.writeFileSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-iQt773/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-exec.js:43:5)
+    at TestHook.runInAsyncScope (node:async_hooks:214:14)
+    at TestHook.run (node:internal/test_runner/test:1047:25)
+    at TestHook.run (node:internal/test_runner/test:1354:18)
+    at Suite.runHook (node:internal/test_runner/test:965:20)
+    at Test.run (node:internal/test_runner/test:1022:27)
+---
+[AUDIT] fs.writeFileSync pid=73121 ppid=73108 cwd=/private/var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-server-fEHzRO
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-2NwwIR/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at startServerDaemon (file:///Users/wolf/Desktop/lansync/src/server.js:661:3)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async handleServerCommand (file:///Users/wolf/Desktop/lansync/src/cli.js:143:22)
+    at async main (file:///Users/wolf/Desktop/lansync/src/cli.js:36:9)
+---
+[AUDIT] fs.appendFileSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-iQt773/server.log
+    at fs.<computed> [as appendFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at log (file:///Users/wolf/Desktop/lansync/src/server.js:29:8)
+    at Server.<anonymous> (file:///Users/wolf/Desktop/lansync/src/server.js:398:9)
+    at Server.emit (node:events:519:28)
+    at parserOnIncoming (node:_http_server:1186:12)
+    at HTTPParser.parserOnHeadersComplete (node:_http_common:122:17)
+---
+[AUDIT] fs.writeFileSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-iQt773/server.log
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at Object.appendFileSync (node:fs:2519:6)
+    at fs.<computed> [as appendFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:18:17)
+    at log (file:///Users/wolf/Desktop/lansync/src/server.js:29:8)
+    at Server.<anonymous> (file:///Users/wolf/Desktop/lansync/src/server.js:398:9)
+    at Server.emit (node:events:519:28)
+    at parserOnIncoming (node:_http_server:1186:12)
+    at HTTPParser.parserOnHeadersComplete (node:_http_common:122:17)
+---
+[AUDIT] fs.unlinkSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-iQt773/server.json
+    at fs.<computed> (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at _unlinkSync (node:internal/fs/rimraf:215:14)
+    at rimrafSync (node:internal/fs/rimraf:196:7)
+    at node:internal/fs/rimraf:254:9
+    at Array.forEach (<anonymous>)
+    at _rmdirSync (node:internal/fs/rimraf:251:7)
+    at rimrafSync (node:internal/fs/rimraf:194:7)
+    at Object.rmSync (node:fs:1246:10)
+---
+[AUDIT] fs.unlinkSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-iQt773/server.log
+    at fs.<computed> (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at _unlinkSync (node:internal/fs/rimraf:215:14)
+    at rimrafSync (node:internal/fs/rimraf:196:7)
+    at node:internal/fs/rimraf:254:9
+    at Array.forEach (<anonymous>)
+    at _rmdirSync (node:internal/fs/rimraf:251:7)
+    at rimrafSync (node:internal/fs/rimraf:194:7)
+    at Object.rmSync (node:fs:1246:10)
+---
+[AUDIT] fs.appendFileSync pid=73110 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-sYodiy/server.log
+    at fs.<computed> [as appendFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at log (file:///Users/wolf/Desktop/lansync/src/server.js:29:8)
+    at Server.<anonymous> (file:///Users/wolf/Desktop/lansync/src/server.js:398:9)
+    at Server.emit (node:events:519:28)
+    at parserOnIncoming (node:_http_server:1186:12)
+    at HTTPParser.parserOnHeadersComplete (node:_http_common:122:17)
+---
+[AUDIT] fs.writeFileSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-9OdK3X/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-exec.js:43:5)
+    at TestHook.runInAsyncScope (node:async_hooks:214:14)
+    at TestHook.run (node:internal/test_runner/test:1047:25)
+    at TestHook.run (node:internal/test_runner/test:1354:18)
+    at Suite.runHook (node:internal/test_runner/test:965:20)
+    at Test.run (node:internal/test_runner/test:1022:27)
+---
+[AUDIT] fs.writeFileSync pid=73110 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-sYodiy/server.log
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at Object.appendFileSync (node:fs:2519:6)
+    at fs.<computed> [as appendFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:18:17)
+    at log (file:///Users/wolf/Desktop/lansync/src/server.js:29:8)
+    at Server.<anonymous> (file:///Users/wolf/Desktop/lansync/src/server.js:398:9)
+    at Server.emit (node:events:519:28)
+    at parserOnIncoming (node:_http_server:1186:12)
+    at HTTPParser.parserOnHeadersComplete (node:_http_common:122:17)
+---
+[AUDIT] fs.writeFileSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-9OdK3X/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at setPolicy (file:///Users/wolf/Desktop/lansync/test/test-exec.js:53:5)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-exec.js:89:5)
+    at Test.runInAsyncScope (node:async_hooks:214:14)
+    at Test.run (node:internal/test_runner/test:1047:25)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+---
+[AUDIT] fs.unlinkSync pid=73110 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-sYodiy/server.json
+    at fs.<computed> [as unlinkSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-server.js:249:14)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async TestHook.run (node:internal/test_runner/test:1054:7)
+    at async Suite.runHook (node:internal/test_runner/test:965:9)
+    at async node:internal/test_runner/test:1010:9
+    at async Test.run (node:internal/test_runner/test:1069:7)
+    at async Promise.all (index 0)
+---
+[AUDIT] fs.writeFileSync pid=73110 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-sYodiy/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-server.js:239:5)
+    at TestHook.runInAsyncScope (node:async_hooks:214:14)
+    at TestHook.run (node:internal/test_runner/test:1047:25)
+    at TestHook.run (node:internal/test_runner/test:1354:18)
+    at Suite.runHook (node:internal/test_runner/test:965:20)
+    at Test.run (node:internal/test_runner/test:1022:27)
+---
+[AUDIT] fs.appendFileSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-9OdK3X/server.log
+    at fs.<computed> [as appendFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at log (file:///Users/wolf/Desktop/lansync/src/server.js:29:8)
+    at handleExec (file:///Users/wolf/Desktop/lansync/src/server.js:262:5)
+    at Server.<anonymous> (file:///Users/wolf/Desktop/lansync/src/server.js:417:15)
+    at Server.emit (node:events:519:28)
+    at parserOnIncoming (node:_http_server:1186:12)
+    at HTTPParser.parserOnHeadersComplete (node:_http_common:122:17)
+---
+[AUDIT] fs.writeFileSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-9OdK3X/server.log
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at Object.appendFileSync (node:fs:2519:6)
+    at fs.<computed> [as appendFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:18:17)
+    at log (file:///Users/wolf/Desktop/lansync/src/server.js:29:8)
+    at handleExec (file:///Users/wolf/Desktop/lansync/src/server.js:262:5)
+    at Server.<anonymous> (file:///Users/wolf/Desktop/lansync/src/server.js:417:15)
+    at Server.emit (node:events:519:28)
+    at parserOnIncoming (node:_http_server:1186:12)
+---
+[AUDIT] fs.unlinkSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-9OdK3X/server.json
+    at fs.<computed> (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at _unlinkSync (node:internal/fs/rimraf:215:14)
+    at rimrafSync (node:internal/fs/rimraf:196:7)
+    at node:internal/fs/rimraf:254:9
+    at Array.forEach (<anonymous>)
+    at _rmdirSync (node:internal/fs/rimraf:251:7)
+    at rimrafSync (node:internal/fs/rimraf:194:7)
+    at Object.rmSync (node:fs:1246:10)
+---
+[AUDIT] fs.unlinkSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-9OdK3X/server.log
+    at fs.<computed> (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at _unlinkSync (node:internal/fs/rimraf:215:14)
+    at rimrafSync (node:internal/fs/rimraf:196:7)
+    at node:internal/fs/rimraf:254:9
+    at Array.forEach (<anonymous>)
+    at _rmdirSync (node:internal/fs/rimraf:251:7)
+    at rimrafSync (node:internal/fs/rimraf:194:7)
+    at Object.rmSync (node:fs:1246:10)
+---
+[AUDIT] fs.appendFileSync pid=73110 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-sYodiy/server.log
+    at fs.<computed> [as appendFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at log (file:///Users/wolf/Desktop/lansync/src/server.js:29:8)
+    at Server.<anonymous> (file:///Users/wolf/Desktop/lansync/src/server.js:398:9)
+    at Server.emit (node:events:519:28)
+    at parserOnIncoming (node:_http_server:1186:12)
+    at HTTPParser.parserOnHeadersComplete (node:_http_common:122:17)
+---
+[AUDIT] fs.writeFileSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-4rxr3k/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-exec.js:43:5)
+    at TestHook.runInAsyncScope (node:async_hooks:214:14)
+    at TestHook.run (node:internal/test_runner/test:1047:25)
+    at TestHook.run (node:internal/test_runner/test:1354:18)
+    at Suite.runHook (node:internal/test_runner/test:965:20)
+    at Test.run (node:internal/test_runner/test:1022:27)
+---
+[AUDIT] fs.writeFileSync pid=73110 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-sYodiy/server.log
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at Object.appendFileSync (node:fs:2519:6)
+    at fs.<computed> [as appendFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:18:17)
+    at log (file:///Users/wolf/Desktop/lansync/src/server.js:29:8)
+    at Server.<anonymous> (file:///Users/wolf/Desktop/lansync/src/server.js:398:9)
+    at Server.emit (node:events:519:28)
+    at parserOnIncoming (node:_http_server:1186:12)
+    at HTTPParser.parserOnHeadersComplete (node:_http_common:122:17)
+---
+[AUDIT] fs.unlinkSync pid=73110 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-sYodiy/server.json
+    at fs.<computed> [as unlinkSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-server.js:249:14)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async TestHook.run (node:internal/test_runner/test:1054:7)
+    at async Suite.runHook (node:internal/test_runner/test:965:9)
+    at async node:internal/test_runner/test:1010:9
+    at async Test.run (node:internal/test_runner/test:1069:7)
+    at async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+---
+[AUDIT] fs.writeFileSync pid=73110 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-sYodiy/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-server.js:239:5)
+    at TestHook.runInAsyncScope (node:async_hooks:214:14)
+    at TestHook.run (node:internal/test_runner/test:1047:25)
+    at TestHook.run (node:internal/test_runner/test:1354:18)
+    at Suite.runHook (node:internal/test_runner/test:965:20)
+    at Test.run (node:internal/test_runner/test:1022:27)
+---
+[AUDIT] fs.writeFileSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-4rxr3k/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at setPolicy (file:///Users/wolf/Desktop/lansync/test/test-exec.js:53:5)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-exec.js:97:5)
+    at Test.runInAsyncScope (node:async_hooks:214:14)
+    at Test.run (node:internal/test_runner/test:1047:25)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+---
+[AUDIT] fs.unlinkSync pid=73110 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-sYodiy/server.json
+    at fs.<computed> [as unlinkSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-server.js:249:14)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async TestHook.run (node:internal/test_runner/test:1054:7)
+    at async Suite.runHook (node:internal/test_runner/test:965:9)
+    at async node:internal/test_runner/test:1010:9
+    at async Test.run (node:internal/test_runner/test:1069:7)
+    at async Promise.all (index 0)
+---
+[AUDIT] fs.writeFileSync pid=73110 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-sYodiy/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-server.js:239:5)
+    at TestHook.runInAsyncScope (node:async_hooks:214:14)
+    at TestHook.run (node:internal/test_runner/test:1047:25)
+    at TestHook.run (node:internal/test_runner/test:1354:18)
+    at Suite.runHook (node:internal/test_runner/test:965:20)
+    at Test.run (node:internal/test_runner/test:1022:27)
+---
+[AUDIT] fs.appendFileSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-4rxr3k/server.log
+    at fs.<computed> [as appendFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at log (file:///Users/wolf/Desktop/lansync/src/server.js:29:8)
+    at finish (file:///Users/wolf/Desktop/lansync/src/server.js:351:5)
+    at ChildProcess.<anonymous> (file:///Users/wolf/Desktop/lansync/src/server.js:366:5)
+    at ChildProcess.emit (node:events:519:28)
+    at maybeClose (node:internal/child_process:1101:16)
+    at ChildProcess._handle.onexit (node:internal/child_process:304:5)
+---
+[AUDIT] fs.writeFileSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-4rxr3k/server.log
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at Object.appendFileSync (node:fs:2519:6)
+    at fs.<computed> [as appendFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:18:17)
+    at log (file:///Users/wolf/Desktop/lansync/src/server.js:29:8)
+    at finish (file:///Users/wolf/Desktop/lansync/src/server.js:351:5)
+    at ChildProcess.<anonymous> (file:///Users/wolf/Desktop/lansync/src/server.js:366:5)
+    at ChildProcess.emit (node:events:519:28)
+    at maybeClose (node:internal/child_process:1101:16)
+---
+[AUDIT] fs.unlinkSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-4rxr3k/server.json
+    at fs.<computed> (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at _unlinkSync (node:internal/fs/rimraf:215:14)
+    at rimrafSync (node:internal/fs/rimraf:196:7)
+    at node:internal/fs/rimraf:254:9
+    at Array.forEach (<anonymous>)
+    at _rmdirSync (node:internal/fs/rimraf:251:7)
+    at rimrafSync (node:internal/fs/rimraf:194:7)
+    at Object.rmSync (node:fs:1246:10)
+---
+[AUDIT] fs.unlinkSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-4rxr3k/server.log
+    at fs.<computed> (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at _unlinkSync (node:internal/fs/rimraf:215:14)
+    at rimrafSync (node:internal/fs/rimraf:196:7)
+    at node:internal/fs/rimraf:254:9
+    at Array.forEach (<anonymous>)
+    at _rmdirSync (node:internal/fs/rimraf:251:7)
+    at rimrafSync (node:internal/fs/rimraf:194:7)
+    at Object.rmSync (node:fs:1246:10)
+---
+[AUDIT] fs.writeFileSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-2F3LYc/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-exec.js:43:5)
+    at TestHook.runInAsyncScope (node:async_hooks:214:14)
+    at TestHook.run (node:internal/test_runner/test:1047:25)
+    at TestHook.run (node:internal/test_runner/test:1354:18)
+    at Suite.runHook (node:internal/test_runner/test:965:20)
+    at Test.run (node:internal/test_runner/test:1022:27)
+---
+[AUDIT] fs.unlinkSync pid=73110 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-sYodiy/server.json
+    at fs.<computed> [as unlinkSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-server.js:249:14)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async TestHook.run (node:internal/test_runner/test:1054:7)
+    at async Suite.runHook (node:internal/test_runner/test:965:9)
+    at async node:internal/test_runner/test:1010:9
+    at async Test.run (node:internal/test_runner/test:1069:7)
+    at async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+---
+[AUDIT] fs.writeFileSync pid=73110 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-sYodiy/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-server.js:239:5)
+    at TestHook.runInAsyncScope (node:async_hooks:214:14)
+    at TestHook.run (node:internal/test_runner/test:1047:25)
+    at TestHook.run (node:internal/test_runner/test:1354:18)
+    at Suite.runHook (node:internal/test_runner/test:965:20)
+    at Test.run (node:internal/test_runner/test:1022:27)
+---
+[AUDIT] fs.unlinkSync pid=73110 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-sYodiy/server.json
+    at fs.<computed> [as unlinkSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-server.js:249:14)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async TestHook.run (node:internal/test_runner/test:1054:7)
+    at async Suite.runHook (node:internal/test_runner/test:965:9)
+    at async node:internal/test_runner/test:1010:9
+    at async Test.run (node:internal/test_runner/test:1069:7)
+    at async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+---
+[AUDIT] fs.writeFileSync pid=73110 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-sYodiy/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-server.js:239:5)
+    at TestHook.runInAsyncScope (node:async_hooks:214:14)
+    at TestHook.run (node:internal/test_runner/test:1047:25)
+    at TestHook.run (node:internal/test_runner/test:1354:18)
+    at Suite.runHook (node:internal/test_runner/test:965:20)
+    at Test.run (node:internal/test_runner/test:1022:27)
+---
+[AUDIT] fs.appendFileSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-2F3LYc/server.log
+    at fs.<computed> [as appendFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at log (file:///Users/wolf/Desktop/lansync/src/server.js:29:8)
+    at finish (file:///Users/wolf/Desktop/lansync/src/server.js:351:5)
+    at ChildProcess.<anonymous> (file:///Users/wolf/Desktop/lansync/src/server.js:366:5)
+    at ChildProcess.emit (node:events:519:28)
+    at maybeClose (node:internal/child_process:1101:16)
+    at ChildProcess._handle.onexit (node:internal/child_process:304:5)
+---
+[AUDIT] fs.writeFileSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-2F3LYc/server.log
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at Object.appendFileSync (node:fs:2519:6)
+    at fs.<computed> [as appendFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:18:17)
+    at log (file:///Users/wolf/Desktop/lansync/src/server.js:29:8)
+    at finish (file:///Users/wolf/Desktop/lansync/src/server.js:351:5)
+    at ChildProcess.<anonymous> (file:///Users/wolf/Desktop/lansync/src/server.js:366:5)
+    at ChildProcess.emit (node:events:519:28)
+    at maybeClose (node:internal/child_process:1101:16)
+---
+[AUDIT] fs.unlinkSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-2F3LYc/server.json
+    at fs.<computed> (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at _unlinkSync (node:internal/fs/rimraf:215:14)
+    at rimrafSync (node:internal/fs/rimraf:196:7)
+    at node:internal/fs/rimraf:254:9
+    at Array.forEach (<anonymous>)
+    at _rmdirSync (node:internal/fs/rimraf:251:7)
+    at rimrafSync (node:internal/fs/rimraf:194:7)
+    at Object.rmSync (node:fs:1246:10)
+---
+[AUDIT] fs.unlinkSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-2F3LYc/server.log
+    at fs.<computed> (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at _unlinkSync (node:internal/fs/rimraf:215:14)
+    at rimrafSync (node:internal/fs/rimraf:196:7)
+    at node:internal/fs/rimraf:254:9
+    at Array.forEach (<anonymous>)
+    at _rmdirSync (node:internal/fs/rimraf:251:7)
+    at rimrafSync (node:internal/fs/rimraf:194:7)
+    at Object.rmSync (node:fs:1246:10)
+---
+[AUDIT] fs.unlinkSync pid=73110 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-sYodiy/server.json
+    at fs.<computed> [as unlinkSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-server.js:249:14)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async TestHook.run (node:internal/test_runner/test:1054:7)
+    at async Suite.runHook (node:internal/test_runner/test:965:9)
+    at async node:internal/test_runner/test:1010:9
+    at async Test.run (node:internal/test_runner/test:1069:7)
+    at async Promise.all (index 0)
+---
+[AUDIT] fs.writeFileSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-qzRg12/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-exec.js:43:5)
+    at TestHook.runInAsyncScope (node:async_hooks:214:14)
+    at TestHook.run (node:internal/test_runner/test:1047:25)
+    at TestHook.run (node:internal/test_runner/test:1354:18)
+    at Suite.runHook (node:internal/test_runner/test:965:20)
+    at Test.run (node:internal/test_runner/test:1022:27)
+---
+[AUDIT] fs.writeFileSync pid=73110 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-sYodiy/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-server.js:239:5)
+    at TestHook.runInAsyncScope (node:async_hooks:214:14)
+    at TestHook.run (node:internal/test_runner/test:1047:25)
+    at TestHook.run (node:internal/test_runner/test:1354:18)
+    at Suite.runHook (node:internal/test_runner/test:965:20)
+    at Test.run (node:internal/test_runner/test:1022:27)
+---
+[AUDIT] fs.writeFileSync pid=73105 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-client-config-rB33Yc/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at setupAuthConfig (file:///Users/wolf/Desktop/lansync/test/test-client.js:322:3)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-client.js:345:5)
+    at TestHook.runInAsyncScope (node:async_hooks:214:14)
+    at TestHook.run (node:internal/test_runner/test:1047:25)
+    at TestHook.run (node:internal/test_runner/test:1354:18)
+    at Suite.runHook (node:internal/test_runner/test:965:20)
+---
+[AUDIT] fs.appendFileSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-qzRg12/server.log
+    at fs.<computed> [as appendFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at log (file:///Users/wolf/Desktop/lansync/src/server.js:29:8)
+    at handleExec (file:///Users/wolf/Desktop/lansync/src/server.js:304:7)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async Server.<anonymous> (file:///Users/wolf/Desktop/lansync/src/server.js:417:9)
+---
+[AUDIT] fs.writeFileSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-qzRg12/server.log
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at Object.appendFileSync (node:fs:2519:6)
+    at fs.<computed> [as appendFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:18:17)
+    at log (file:///Users/wolf/Desktop/lansync/src/server.js:29:8)
+    at handleExec (file:///Users/wolf/Desktop/lansync/src/server.js:304:7)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async Server.<anonymous> (file:///Users/wolf/Desktop/lansync/src/server.js:417:9)
+---
+[AUDIT] fs.unlinkSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-qzRg12/server.json
+    at fs.<computed> (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at _unlinkSync (node:internal/fs/rimraf:215:14)
+    at rimrafSync (node:internal/fs/rimraf:196:7)
+    at node:internal/fs/rimraf:254:9
+    at Array.forEach (<anonymous>)
+    at _rmdirSync (node:internal/fs/rimraf:251:7)
+    at rimrafSync (node:internal/fs/rimraf:194:7)
+    at Object.rmSync (node:fs:1246:10)
+---
+[AUDIT] fs.unlinkSync pid=73110 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-sYodiy/server.json
+    at fs.<computed> [as unlinkSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-server.js:249:14)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async TestHook.run (node:internal/test_runner/test:1054:7)
+    at async Suite.runHook (node:internal/test_runner/test:965:9)
+    at async node:internal/test_runner/test:1010:9
+    at async Test.run (node:internal/test_runner/test:1069:7)
+    at async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+---
+[AUDIT] fs.unlinkSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-qzRg12/server.log
+    at fs.<computed> (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at _unlinkSync (node:internal/fs/rimraf:215:14)
+    at rimrafSync (node:internal/fs/rimraf:196:7)
+    at node:internal/fs/rimraf:254:9
+    at Array.forEach (<anonymous>)
+    at _rmdirSync (node:internal/fs/rimraf:251:7)
+    at rimrafSync (node:internal/fs/rimraf:194:7)
+    at Object.rmSync (node:fs:1246:10)
+---
+[AUDIT] fs.writeFileSync pid=73110 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-sYodiy/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-server.js:239:5)
+    at TestHook.runInAsyncScope (node:async_hooks:214:14)
+    at TestHook.run (node:internal/test_runner/test:1047:25)
+    at TestHook.run (node:internal/test_runner/test:1354:18)
+    at Suite.runHook (node:internal/test_runner/test:965:20)
+    at Test.run (node:internal/test_runner/test:1022:27)
+---
+[AUDIT] fs.writeFileSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-k7KLJp/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-exec.js:43:5)
+    at TestHook.runInAsyncScope (node:async_hooks:214:14)
+    at TestHook.run (node:internal/test_runner/test:1047:25)
+    at TestHook.run (node:internal/test_runner/test:1354:18)
+    at Suite.runHook (node:internal/test_runner/test:965:20)
+    at Test.run (node:internal/test_runner/test:1022:27)
+---
+[AUDIT] fs.appendFileSync pid=73110 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-sYodiy/server.log
+    at fs.<computed> [as appendFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at log (file:///Users/wolf/Desktop/lansync/src/server.js:29:8)
+    at handleFileGet (file:///Users/wolf/Desktop/lansync/src/server.js:466:5)
+    at Server.<anonymous> (file:///Users/wolf/Desktop/lansync/src/server.js:411:15)
+    at Server.emit (node:events:519:28)
+    at parserOnIncoming (node:_http_server:1186:12)
+    at HTTPParser.parserOnHeadersComplete (node:_http_common:122:17)
+---
+[AUDIT] fs.appendFileSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-k7KLJp/server.log
+    at fs.<computed> [as appendFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at log (file:///Users/wolf/Desktop/lansync/src/server.js:29:8)
+    at handleExec (file:///Users/wolf/Desktop/lansync/src/server.js:292:5)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async Server.<anonymous> (file:///Users/wolf/Desktop/lansync/src/server.js:417:9)
+---
+[AUDIT] fs.writeFileSync pid=73110 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-sYodiy/server.log
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at Object.appendFileSync (node:fs:2519:6)
+    at fs.<computed> [as appendFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:18:17)
+    at log (file:///Users/wolf/Desktop/lansync/src/server.js:29:8)
+    at handleFileGet (file:///Users/wolf/Desktop/lansync/src/server.js:466:5)
+    at Server.<anonymous> (file:///Users/wolf/Desktop/lansync/src/server.js:411:15)
+    at Server.emit (node:events:519:28)
+    at parserOnIncoming (node:_http_server:1186:12)
+---
+[AUDIT] fs.writeFileSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-k7KLJp/server.log
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at Object.appendFileSync (node:fs:2519:6)
+    at fs.<computed> [as appendFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:18:17)
+    at log (file:///Users/wolf/Desktop/lansync/src/server.js:29:8)
+    at handleExec (file:///Users/wolf/Desktop/lansync/src/server.js:292:5)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async Server.<anonymous> (file:///Users/wolf/Desktop/lansync/src/server.js:417:9)
+---
+[AUDIT] fs.unlinkSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-k7KLJp/server.json
+    at fs.<computed> (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at _unlinkSync (node:internal/fs/rimraf:215:14)
+    at rimrafSync (node:internal/fs/rimraf:196:7)
+    at node:internal/fs/rimraf:254:9
+    at Array.forEach (<anonymous>)
+    at _rmdirSync (node:internal/fs/rimraf:251:7)
+    at rimrafSync (node:internal/fs/rimraf:194:7)
+    at Object.rmSync (node:fs:1246:10)
+---
+[AUDIT] fs.unlinkSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-k7KLJp/server.log
+    at fs.<computed> (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at _unlinkSync (node:internal/fs/rimraf:215:14)
+    at rimrafSync (node:internal/fs/rimraf:196:7)
+    at node:internal/fs/rimraf:254:9
+    at Array.forEach (<anonymous>)
+    at _rmdirSync (node:internal/fs/rimraf:251:7)
+    at rimrafSync (node:internal/fs/rimraf:194:7)
+    at Object.rmSync (node:fs:1246:10)
+---
+[AUDIT] fs.unlinkSync pid=73110 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-sYodiy/server.json
+    at fs.<computed> [as unlinkSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-server.js:249:14)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async TestHook.run (node:internal/test_runner/test:1054:7)
+    at async Suite.runHook (node:internal/test_runner/test:965:9)
+    at async node:internal/test_runner/test:1010:9
+    at async Test.run (node:internal/test_runner/test:1069:7)
+    at async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+---
+[AUDIT] fs.writeFileSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-A5dDYx/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-exec.js:43:5)
+    at TestHook.runInAsyncScope (node:async_hooks:214:14)
+    at TestHook.run (node:internal/test_runner/test:1047:25)
+    at TestHook.run (node:internal/test_runner/test:1354:18)
+    at Suite.runHook (node:internal/test_runner/test:965:20)
+    at Test.run (node:internal/test_runner/test:1022:27)
+---
+[AUDIT] fs.writeFileSync pid=73110 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-sYodiy/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-server.js:239:5)
+    at TestHook.runInAsyncScope (node:async_hooks:214:14)
+    at TestHook.run (node:internal/test_runner/test:1047:25)
+    at TestHook.run (node:internal/test_runner/test:1354:18)
+    at Suite.runHook (node:internal/test_runner/test:965:20)
+    at Test.run (node:internal/test_runner/test:1022:27)
+---
+[AUDIT] fs.unlinkSync pid=73105 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-client-config-rB33Yc/server.json
+    at fs.<computed> (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at _unlinkSync (node:internal/fs/rimraf:215:14)
+    at rimrafSync (node:internal/fs/rimraf:196:7)
+    at node:internal/fs/rimraf:254:9
+    at Array.forEach (<anonymous>)
+    at _rmdirSync (node:internal/fs/rimraf:251:7)
+    at rimrafSync (node:internal/fs/rimraf:194:7)
+    at Object.rmSync (node:fs:1246:10)
+---
+[AUDIT] fs.unlinkSync pid=73110 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-sYodiy/server.json
+    at fs.<computed> [as unlinkSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-server.js:249:14)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async TestHook.run (node:internal/test_runner/test:1054:7)
+    at async Suite.runHook (node:internal/test_runner/test:965:9)
+    at async node:internal/test_runner/test:1010:9
+    at async Test.run (node:internal/test_runner/test:1069:7)
+    at async Promise.all (index 0)
+---
+[AUDIT] fs.writeFileSync pid=73105 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-client-config-MDRWny/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at setupAuthConfig (file:///Users/wolf/Desktop/lansync/test/test-client.js:322:3)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-client.js:345:5)
+    at TestHook.runInAsyncScope (node:async_hooks:214:14)
+    at TestHook.run (node:internal/test_runner/test:1047:25)
+    at TestHook.run (node:internal/test_runner/test:1354:18)
+    at Suite.runHook (node:internal/test_runner/test:965:20)
+---
+[AUDIT] fs.writeFileSync pid=73110 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-sYodiy/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-server.js:239:5)
+    at TestHook.runInAsyncScope (node:async_hooks:214:14)
+    at TestHook.run (node:internal/test_runner/test:1047:25)
+    at TestHook.run (node:internal/test_runner/test:1354:18)
+    at Suite.runHook (node:internal/test_runner/test:965:20)
+    at Test.run (node:internal/test_runner/test:1022:27)
+---
+[AUDIT] fs.unlinkSync pid=73110 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-sYodiy/server.json
+    at fs.<computed> [as unlinkSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-server.js:249:14)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async TestHook.run (node:internal/test_runner/test:1054:7)
+    at async Suite.runHook (node:internal/test_runner/test:965:9)
+    at async node:internal/test_runner/test:1010:9
+    at async Test.run (node:internal/test_runner/test:1069:7)
+    at async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+---
+[AUDIT] fs.writeFileSync pid=73110 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-sYodiy/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-server.js:239:5)
+    at TestHook.runInAsyncScope (node:async_hooks:214:14)
+    at TestHook.run (node:internal/test_runner/test:1047:25)
+    at TestHook.run (node:internal/test_runner/test:1354:18)
+    at Suite.runHook (node:internal/test_runner/test:965:20)
+    at Test.run (node:internal/test_runner/test:1022:27)
+---
+[AUDIT] fs.appendFileSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-A5dDYx/server.log
+    at fs.<computed> [as appendFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at log (file:///Users/wolf/Desktop/lansync/src/server.js:29:8)
+    at finish (file:///Users/wolf/Desktop/lansync/src/server.js:351:5)
+    at ChildProcess.<anonymous> (file:///Users/wolf/Desktop/lansync/src/server.js:366:5)
+    at ChildProcess.emit (node:events:519:28)
+    at maybeClose (node:internal/child_process:1101:16)
+    at ChildProcess._handle.onexit (node:internal/child_process:304:5)
+---
+[AUDIT] fs.writeFileSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-A5dDYx/server.log
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at Object.appendFileSync (node:fs:2519:6)
+    at fs.<computed> [as appendFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:18:17)
+    at log (file:///Users/wolf/Desktop/lansync/src/server.js:29:8)
+    at finish (file:///Users/wolf/Desktop/lansync/src/server.js:351:5)
+    at ChildProcess.<anonymous> (file:///Users/wolf/Desktop/lansync/src/server.js:366:5)
+    at ChildProcess.emit (node:events:519:28)
+    at maybeClose (node:internal/child_process:1101:16)
+---
+[AUDIT] fs.unlinkSync pid=73110 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-sYodiy/server.json
+    at fs.<computed> [as unlinkSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-server.js:249:14)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async TestHook.run (node:internal/test_runner/test:1054:7)
+    at async Suite.runHook (node:internal/test_runner/test:965:9)
+    at async node:internal/test_runner/test:1010:9
+    at async Test.run (node:internal/test_runner/test:1069:7)
+    at async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+---
+[AUDIT] fs.unlinkSync pid=73105 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-client-config-MDRWny/server.json
+    at fs.<computed> (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at _unlinkSync (node:internal/fs/rimraf:215:14)
+    at rimrafSync (node:internal/fs/rimraf:196:7)
+    at node:internal/fs/rimraf:254:9
+    at Array.forEach (<anonymous>)
+    at _rmdirSync (node:internal/fs/rimraf:251:7)
+    at rimrafSync (node:internal/fs/rimraf:194:7)
+    at Object.rmSync (node:fs:1246:10)
+---
+[AUDIT] fs.writeFileSync pid=73110 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-sYodiy/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-server.js:239:5)
+    at TestHook.runInAsyncScope (node:async_hooks:214:14)
+    at TestHook.run (node:internal/test_runner/test:1047:25)
+    at TestHook.run (node:internal/test_runner/test:1354:18)
+    at Suite.runHook (node:internal/test_runner/test:965:20)
+    at Test.run (node:internal/test_runner/test:1022:27)
+---
+[AUDIT] fs.writeFileSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-A5dDYx/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at setPolicy (file:///Users/wolf/Desktop/lansync/test/test-exec.js:53:5)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-exec.js:124:5)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async Test.run (node:internal/test_runner/test:1054:7)
+    at async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+---
+[AUDIT] fs.writeFileSync pid=73105 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-client-config-kqfyD3/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at setupAuthConfig (file:///Users/wolf/Desktop/lansync/test/test-client.js:322:3)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-client.js:345:5)
+    at TestHook.runInAsyncScope (node:async_hooks:214:14)
+    at TestHook.run (node:internal/test_runner/test:1047:25)
+    at TestHook.run (node:internal/test_runner/test:1354:18)
+    at Suite.runHook (node:internal/test_runner/test:965:20)
+---
+[AUDIT] fs.writeFileSync pid=73121 ppid=73108 cwd=/private/var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-server-fEHzRO
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-2NwwIR/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at startServerDaemon (file:///Users/wolf/Desktop/lansync/src/server.js:697:3)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async handleServerCommand (file:///Users/wolf/Desktop/lansync/src/cli.js:143:22)
+    at async main (file:///Users/wolf/Desktop/lansync/src/cli.js:36:9)
+---
+[AUDIT] fs.appendFileSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-A5dDYx/server.log
+    at fs.<computed> [as appendFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at log (file:///Users/wolf/Desktop/lansync/src/server.js:29:8)
+    at handleExec (file:///Users/wolf/Desktop/lansync/src/server.js:304:7)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async Server.<anonymous> (file:///Users/wolf/Desktop/lansync/src/server.js:417:9)
+---
+[AUDIT] fs.writeFileSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-A5dDYx/server.log
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at Object.appendFileSync (node:fs:2519:6)
+    at fs.<computed> [as appendFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:18:17)
+    at log (file:///Users/wolf/Desktop/lansync/src/server.js:29:8)
+    at handleExec (file:///Users/wolf/Desktop/lansync/src/server.js:304:7)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async Server.<anonymous> (file:///Users/wolf/Desktop/lansync/src/server.js:417:9)
+---
+[AUDIT] fs.unlinkSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-A5dDYx/server.json
+    at fs.<computed> (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at _unlinkSync (node:internal/fs/rimraf:215:14)
+    at rimrafSync (node:internal/fs/rimraf:196:7)
+    at node:internal/fs/rimraf:254:9
+    at Array.forEach (<anonymous>)
+    at _rmdirSync (node:internal/fs/rimraf:251:7)
+    at rimrafSync (node:internal/fs/rimraf:194:7)
+    at Object.rmSync (node:fs:1246:10)
+---
+[AUDIT] fs.unlinkSync pid=73110 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-sYodiy/server.json
+    at fs.<computed> [as unlinkSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-server.js:249:14)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async TestHook.run (node:internal/test_runner/test:1054:7)
+    at async Suite.runHook (node:internal/test_runner/test:965:9)
+    at async node:internal/test_runner/test:1010:9
+    at async Test.run (node:internal/test_runner/test:1069:7)
+    at async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+---
+[AUDIT] fs.unlinkSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-A5dDYx/server.log
+    at fs.<computed> (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at _unlinkSync (node:internal/fs/rimraf:215:14)
+    at rimrafSync (node:internal/fs/rimraf:196:7)
+    at node:internal/fs/rimraf:254:9
+    at Array.forEach (<anonymous>)
+    at _rmdirSync (node:internal/fs/rimraf:251:7)
+    at rimrafSync (node:internal/fs/rimraf:194:7)
+    at Object.rmSync (node:fs:1246:10)
+---
+[AUDIT] fs.writeFileSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-LKWDqL/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-exec.js:43:5)
+    at TestHook.runInAsyncScope (node:async_hooks:214:14)
+    at TestHook.run (node:internal/test_runner/test:1047:25)
+    at TestHook.run (node:internal/test_runner/test:1354:18)
+    at Suite.runHook (node:internal/test_runner/test:965:20)
+    at Test.run (node:internal/test_runner/test:1022:27)
+---
+[AUDIT] fs.writeFileSync pid=73110 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-sYodiy/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-server.js:239:5)
+    at TestHook.runInAsyncScope (node:async_hooks:214:14)
+    at TestHook.run (node:internal/test_runner/test:1047:25)
+    at TestHook.run (node:internal/test_runner/test:1354:18)
+    at Suite.runHook (node:internal/test_runner/test:965:20)
+    at Test.run (node:internal/test_runner/test:1022:27)
+---
+[AUDIT] fs.unlinkSync pid=73105 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-client-config-kqfyD3/server.json
+    at fs.<computed> (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at _unlinkSync (node:internal/fs/rimraf:215:14)
+    at rimrafSync (node:internal/fs/rimraf:196:7)
+    at node:internal/fs/rimraf:254:9
+    at Array.forEach (<anonymous>)
+    at _rmdirSync (node:internal/fs/rimraf:251:7)
+    at rimrafSync (node:internal/fs/rimraf:194:7)
+    at Object.rmSync (node:fs:1246:10)
+---
+[AUDIT] fs.writeFileSync pid=73105 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-client-config-G5SxSJ/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at setupAuthConfig (file:///Users/wolf/Desktop/lansync/test/test-client.js:322:3)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-client.js:345:5)
+    at TestHook.runInAsyncScope (node:async_hooks:214:14)
+    at TestHook.run (node:internal/test_runner/test:1047:25)
+    at TestHook.run (node:internal/test_runner/test:1354:18)
+    at Suite.runHook (node:internal/test_runner/test:965:20)
+---
+[AUDIT] fs.unlinkSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-LKWDqL/server.json
+    at fs.<computed> (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at _unlinkSync (node:internal/fs/rimraf:215:14)
+    at rimrafSync (node:internal/fs/rimraf:196:7)
+    at node:internal/fs/rimraf:254:9
+    at Array.forEach (<anonymous>)
+    at _rmdirSync (node:internal/fs/rimraf:251:7)
+    at rimrafSync (node:internal/fs/rimraf:194:7)
+    at Object.rmSync (node:fs:1246:10)
+---
+[AUDIT] fs.unlinkSync pid=73110 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-sYodiy/server.json
+    at fs.<computed> [as unlinkSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-server.js:249:14)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async TestHook.run (node:internal/test_runner/test:1054:7)
+    at async Suite.runHook (node:internal/test_runner/test:965:9)
+    at async node:internal/test_runner/test:1010:9
+    at async Test.run (node:internal/test_runner/test:1069:7)
+    at async Promise.all (index 0)
+---
+[AUDIT] fs.writeFileSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-Bd7RL2/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-exec.js:43:5)
+    at TestHook.runInAsyncScope (node:async_hooks:214:14)
+    at TestHook.run (node:internal/test_runner/test:1047:25)
+    at TestHook.run (node:internal/test_runner/test:1354:18)
+    at Suite.runHook (node:internal/test_runner/test:965:20)
+    at Test.run (node:internal/test_runner/test:1022:27)
+---
+[AUDIT] fs.writeFileSync pid=73110 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-sYodiy/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-server.js:239:5)
+    at TestHook.runInAsyncScope (node:async_hooks:214:14)
+    at TestHook.run (node:internal/test_runner/test:1047:25)
+    at TestHook.run (node:internal/test_runner/test:1354:18)
+    at Suite.runHook (node:internal/test_runner/test:965:20)
+    at Test.run (node:internal/test_runner/test:1022:27)
+---
+[AUDIT] fs.appendFileSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-Bd7RL2/server.log
+    at fs.<computed> [as appendFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at log (file:///Users/wolf/Desktop/lansync/src/server.js:29:8)
+    at Server.<anonymous> (file:///Users/wolf/Desktop/lansync/src/server.js:398:9)
+    at Server.emit (node:events:519:28)
+    at parserOnIncoming (node:_http_server:1186:12)
+    at HTTPParser.parserOnHeadersComplete (node:_http_common:122:17)
+---
+[AUDIT] fs.writeFileSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-Bd7RL2/server.log
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at Object.appendFileSync (node:fs:2519:6)
+    at fs.<computed> [as appendFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:18:17)
+    at log (file:///Users/wolf/Desktop/lansync/src/server.js:29:8)
+    at Server.<anonymous> (file:///Users/wolf/Desktop/lansync/src/server.js:398:9)
+    at Server.emit (node:events:519:28)
+    at parserOnIncoming (node:_http_server:1186:12)
+    at HTTPParser.parserOnHeadersComplete (node:_http_common:122:17)
+---
+[AUDIT] fs.unlinkSync pid=73110 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-sYodiy/server.json
+    at fs.<computed> [as unlinkSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-server.js:249:14)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async TestHook.run (node:internal/test_runner/test:1054:7)
+    at async Suite.runHook (node:internal/test_runner/test:965:9)
+    at async node:internal/test_runner/test:1010:9
+    at async Test.run (node:internal/test_runner/test:1069:7)
+    at async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+---
+[AUDIT] fs.unlinkSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-Bd7RL2/server.json
+    at fs.<computed> (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at _unlinkSync (node:internal/fs/rimraf:215:14)
+    at rimrafSync (node:internal/fs/rimraf:196:7)
+    at node:internal/fs/rimraf:254:9
+    at Array.forEach (<anonymous>)
+    at _rmdirSync (node:internal/fs/rimraf:251:7)
+    at rimrafSync (node:internal/fs/rimraf:194:7)
+    at Object.rmSync (node:fs:1246:10)
+---
+[AUDIT] fs.unlinkSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-Bd7RL2/server.log
+    at fs.<computed> (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at _unlinkSync (node:internal/fs/rimraf:215:14)
+    at rimrafSync (node:internal/fs/rimraf:196:7)
+    at node:internal/fs/rimraf:254:9
+    at Array.forEach (<anonymous>)
+    at _rmdirSync (node:internal/fs/rimraf:251:7)
+    at rimrafSync (node:internal/fs/rimraf:194:7)
+    at Object.rmSync (node:fs:1246:10)
+---
+[AUDIT] fs.writeFileSync pid=73110 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-sYodiy/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-server.js:239:5)
+    at TestHook.runInAsyncScope (node:async_hooks:214:14)
+    at TestHook.run (node:internal/test_runner/test:1047:25)
+    at TestHook.run (node:internal/test_runner/test:1354:18)
+    at Suite.runHook (node:internal/test_runner/test:965:20)
+    at Test.run (node:internal/test_runner/test:1022:27)
+---
+[AUDIT] fs.writeFileSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-6gG4Bx/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-exec.js:43:5)
+    at TestHook.runInAsyncScope (node:async_hooks:214:14)
+    at TestHook.run (node:internal/test_runner/test:1047:25)
+    at TestHook.run (node:internal/test_runner/test:1354:18)
+    at Suite.runHook (node:internal/test_runner/test:965:20)
+    at Test.run (node:internal/test_runner/test:1022:27)
+---
+[AUDIT] fs.unlinkSync pid=73105 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-client-config-G5SxSJ/server.json
+    at fs.<computed> (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at _unlinkSync (node:internal/fs/rimraf:215:14)
+    at rimrafSync (node:internal/fs/rimraf:196:7)
+    at node:internal/fs/rimraf:254:9
+    at Array.forEach (<anonymous>)
+    at _rmdirSync (node:internal/fs/rimraf:251:7)
+    at rimrafSync (node:internal/fs/rimraf:194:7)
+    at Object.rmSync (node:fs:1246:10)
+---
+[AUDIT] fs.writeFileSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-6gG4Bx/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-exec.js:150:8)
+    at Test.runInAsyncScope (node:async_hooks:214:14)
+    at Test.run (node:internal/test_runner/test:1047:25)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+---
+[AUDIT] fs.writeFileSync pid=73105 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-client-config-qVEjZT/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at setupAuthConfig (file:///Users/wolf/Desktop/lansync/test/test-client.js:322:3)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-client.js:440:5)
+    at TestHook.runInAsyncScope (node:async_hooks:214:14)
+    at TestHook.run (node:internal/test_runner/test:1047:25)
+    at TestHook.run (node:internal/test_runner/test:1354:18)
+    at Suite.runHook (node:internal/test_runner/test:965:20)
+---
+[AUDIT] fs.unlinkSync pid=73110 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-sYodiy/server.json
+    at fs.<computed> [as unlinkSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-server.js:249:14)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async TestHook.run (node:internal/test_runner/test:1054:7)
+    at async Suite.runHook (node:internal/test_runner/test:965:9)
+    at async node:internal/test_runner/test:1010:9
+    at async Test.run (node:internal/test_runner/test:1069:7)
+    at async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+---
+[AUDIT] fs.writeFileSync pid=73110 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-sYodiy/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-server.js:239:5)
+    at TestHook.runInAsyncScope (node:async_hooks:214:14)
+    at TestHook.run (node:internal/test_runner/test:1047:25)
+    at TestHook.run (node:internal/test_runner/test:1354:18)
+    at Suite.runHook (node:internal/test_runner/test:965:20)
+    at Test.run (node:internal/test_runner/test:1022:27)
+---
+[AUDIT] fs.writeFileSync pid=73152 ppid=73108 cwd=/private/var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-client-NLC8ov
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-2NwwIR/client.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeClientConfig (file:///Users/wolf/Desktop/lansync/src/config.js:49:6)
+    at handleClientCommand (file:///Users/wolf/Desktop/lansync/src/cli.js:251:7)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async main (file:///Users/wolf/Desktop/lansync/src/cli.js:39:9)
+---
+[AUDIT] fs.unlinkSync pid=73110 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-sYodiy/server.json
+    at fs.<computed> [as unlinkSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-server.js:249:14)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async TestHook.run (node:internal/test_runner/test:1054:7)
+    at async Suite.runHook (node:internal/test_runner/test:965:9)
+    at async node:internal/test_runner/test:1010:9
+    at async Test.run (node:internal/test_runner/test:1069:7)
+    at async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+---
+[AUDIT] fs.unlinkSync pid=73105 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-client-config-qVEjZT/server.json
+    at fs.<computed> (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at _unlinkSync (node:internal/fs/rimraf:215:14)
+    at rimrafSync (node:internal/fs/rimraf:196:7)
+    at node:internal/fs/rimraf:254:9
+    at Array.forEach (<anonymous>)
+    at _rmdirSync (node:internal/fs/rimraf:251:7)
+    at rimrafSync (node:internal/fs/rimraf:194:7)
+    at Object.rmSync (node:fs:1246:10)
+---
+[AUDIT] fs.writeFileSync pid=73105 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-client-config-0MjOJx/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at setupAuthConfig (file:///Users/wolf/Desktop/lansync/test/test-client.js:322:3)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-client.js:440:5)
+    at TestHook.runInAsyncScope (node:async_hooks:214:14)
+    at TestHook.run (node:internal/test_runner/test:1047:25)
+    at TestHook.run (node:internal/test_runner/test:1354:18)
+    at Suite.runHook (node:internal/test_runner/test:965:20)
+---
+[AUDIT] fs.unlinkSync pid=73105 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-client-config-0MjOJx/server.json
+    at fs.<computed> (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at _unlinkSync (node:internal/fs/rimraf:215:14)
+    at rimrafSync (node:internal/fs/rimraf:196:7)
+    at node:internal/fs/rimraf:254:9
+    at Array.forEach (<anonymous>)
+    at _rmdirSync (node:internal/fs/rimraf:251:7)
+    at rimrafSync (node:internal/fs/rimraf:194:7)
+    at Object.rmSync (node:fs:1246:10)
+---
+[AUDIT] fs.writeFileSync pid=73105 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-client-config-Js15tJ/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at setupAuthConfig (file:///Users/wolf/Desktop/lansync/test/test-client.js:322:3)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-client.js:440:5)
+    at TestHook.runInAsyncScope (node:async_hooks:214:14)
+    at TestHook.run (node:internal/test_runner/test:1047:25)
+    at TestHook.run (node:internal/test_runner/test:1354:18)
+    at Suite.runHook (node:internal/test_runner/test:965:20)
+---
+[AUDIT] fs.unlinkSync pid=73105 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-client-config-Js15tJ/server.json
+    at fs.<computed> (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at _unlinkSync (node:internal/fs/rimraf:215:14)
+    at rimrafSync (node:internal/fs/rimraf:196:7)
+    at node:internal/fs/rimraf:254:9
+    at Array.forEach (<anonymous>)
+    at _rmdirSync (node:internal/fs/rimraf:251:7)
+    at rimrafSync (node:internal/fs/rimraf:194:7)
+    at Object.rmSync (node:fs:1246:10)
+---
+[AUDIT] fs.appendFileSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-6gG4Bx/server.log
+    at fs.<computed> [as appendFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at log (file:///Users/wolf/Desktop/lansync/src/server.js:29:8)
+    at handleExec (file:///Users/wolf/Desktop/lansync/src/server.js:314:5)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async Server.<anonymous> (file:///Users/wolf/Desktop/lansync/src/server.js:417:9)
+---
+[AUDIT] fs.writeFileSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-6gG4Bx/server.log
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at Object.appendFileSync (node:fs:2519:6)
+    at fs.<computed> [as appendFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:18:17)
+    at log (file:///Users/wolf/Desktop/lansync/src/server.js:29:8)
+    at handleExec (file:///Users/wolf/Desktop/lansync/src/server.js:314:5)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async Server.<anonymous> (file:///Users/wolf/Desktop/lansync/src/server.js:417:9)
+---
+[AUDIT] fs.unlinkSync pid=73234 ppid=73108 cwd=/private/var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-server-fEHzRO
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-2NwwIR/server.json
+    at fs.<computed> [as unlinkSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at stopServerDaemon (file:///Users/wolf/Desktop/lansync/src/server.js:717:8)
+    at handleServerCommand (file:///Users/wolf/Desktop/lansync/src/cli.js:154:23)
+    at main (file:///Users/wolf/Desktop/lansync/src/cli.js:36:15)
+    at file:///Users/wolf/Desktop/lansync/src/cli.js:567:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:343:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:665:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+---
+[AUDIT] fs.unlinkSync pid=73108 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-2NwwIR/client.json
+    at fs.<computed> (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at _unlinkSync (node:internal/fs/rimraf:215:14)
+    at rimrafSync (node:internal/fs/rimraf:196:7)
+    at node:internal/fs/rimraf:254:9
+    at Array.forEach (<anonymous>)
+    at _rmdirSync (node:internal/fs/rimraf:251:7)
+    at rimrafSync (node:internal/fs/rimraf:194:7)
+    at Object.rmSync (node:fs:1246:10)
+---
+[AUDIT] fs.unlinkSync pid=73108 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-2NwwIR/server.log
+    at fs.<computed> (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at _unlinkSync (node:internal/fs/rimraf:215:14)
+    at rimrafSync (node:internal/fs/rimraf:196:7)
+    at node:internal/fs/rimraf:254:9
+    at Array.forEach (<anonymous>)
+    at _rmdirSync (node:internal/fs/rimraf:251:7)
+    at rimrafSync (node:internal/fs/rimraf:194:7)
+    at Object.rmSync (node:fs:1246:10)
+---
+[AUDIT] fs.writeFileSync pid=73265 ppid=73108 cwd=/private/var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-server-lJXcGz
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-NYI1rL/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at startServerDaemon (file:///Users/wolf/Desktop/lansync/src/server.js:661:3)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async handleServerCommand (file:///Users/wolf/Desktop/lansync/src/cli.js:143:22)
+    at async main (file:///Users/wolf/Desktop/lansync/src/cli.js:36:9)
+---
+[AUDIT] fs.writeFileSync pid=73265 ppid=73108 cwd=/private/var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-server-lJXcGz
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-NYI1rL/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at startServerDaemon (file:///Users/wolf/Desktop/lansync/src/server.js:697:3)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async handleServerCommand (file:///Users/wolf/Desktop/lansync/src/cli.js:143:22)
+    at async main (file:///Users/wolf/Desktop/lansync/src/cli.js:36:9)
+---
+[AUDIT] fs.writeFileSync pid=73278 ppid=73108 cwd=/private/var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-client-j2Idwy
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-NYI1rL/client.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeClientConfig (file:///Users/wolf/Desktop/lansync/src/config.js:49:6)
+    at handleClientCommand (file:///Users/wolf/Desktop/lansync/src/cli.js:251:7)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async main (file:///Users/wolf/Desktop/lansync/src/cli.js:39:9)
+---
+[AUDIT] fs.unlinkSync pid=73302 ppid=73108 cwd=/private/var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-server-lJXcGz
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-NYI1rL/server.json
+    at fs.<computed> [as unlinkSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at stopServerDaemon (file:///Users/wolf/Desktop/lansync/src/server.js:717:8)
+    at handleServerCommand (file:///Users/wolf/Desktop/lansync/src/cli.js:154:23)
+    at main (file:///Users/wolf/Desktop/lansync/src/cli.js:36:15)
+    at file:///Users/wolf/Desktop/lansync/src/cli.js:567:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:343:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:665:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+---
+[AUDIT] fs.unlinkSync pid=73108 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-NYI1rL/client.json
+    at fs.<computed> (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at _unlinkSync (node:internal/fs/rimraf:215:14)
+    at rimrafSync (node:internal/fs/rimraf:196:7)
+    at node:internal/fs/rimraf:254:9
+    at Array.forEach (<anonymous>)
+    at _rmdirSync (node:internal/fs/rimraf:251:7)
+    at rimrafSync (node:internal/fs/rimraf:194:7)
+    at Object.rmSync (node:fs:1246:10)
+---
+[AUDIT] fs.unlinkSync pid=73108 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-NYI1rL/server.log
+    at fs.<computed> (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at _unlinkSync (node:internal/fs/rimraf:215:14)
+    at rimrafSync (node:internal/fs/rimraf:196:7)
+    at node:internal/fs/rimraf:254:9
+    at Array.forEach (<anonymous>)
+    at _rmdirSync (node:internal/fs/rimraf:251:7)
+    at rimrafSync (node:internal/fs/rimraf:194:7)
+    at Object.rmSync (node:fs:1246:10)
+---
+[AUDIT] fs.writeFileSync pid=73333 ppid=73108 cwd=/private/var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-server-7BBlmJ
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-1VEQcL/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at startServerDaemon (file:///Users/wolf/Desktop/lansync/src/server.js:661:3)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async handleServerCommand (file:///Users/wolf/Desktop/lansync/src/cli.js:143:22)
+    at async main (file:///Users/wolf/Desktop/lansync/src/cli.js:36:9)
+---
+[AUDIT] fs.writeFileSync pid=73333 ppid=73108 cwd=/private/var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-server-7BBlmJ
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-1VEQcL/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at startServerDaemon (file:///Users/wolf/Desktop/lansync/src/server.js:697:3)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async handleServerCommand (file:///Users/wolf/Desktop/lansync/src/cli.js:143:22)
+    at async main (file:///Users/wolf/Desktop/lansync/src/cli.js:36:9)
+---
+[AUDIT] fs.writeFileSync pid=73345 ppid=73108 cwd=/private/var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-client-G7K1G6
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-1VEQcL/client.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeClientConfig (file:///Users/wolf/Desktop/lansync/src/config.js:49:6)
+    at handleClientCommand (file:///Users/wolf/Desktop/lansync/src/cli.js:251:7)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async main (file:///Users/wolf/Desktop/lansync/src/cli.js:39:9)
+---
+[AUDIT] fs.unlinkSync pid=73405 ppid=73108 cwd=/private/var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-server-7BBlmJ
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-1VEQcL/server.json
+    at fs.<computed> [as unlinkSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at stopServerDaemon (file:///Users/wolf/Desktop/lansync/src/server.js:717:8)
+    at handleServerCommand (file:///Users/wolf/Desktop/lansync/src/cli.js:154:23)
+    at main (file:///Users/wolf/Desktop/lansync/src/cli.js:36:15)
+    at file:///Users/wolf/Desktop/lansync/src/cli.js:567:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:343:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:665:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+---
+[AUDIT] fs.unlinkSync pid=73108 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-1VEQcL/client.json
+    at fs.<computed> (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at _unlinkSync (node:internal/fs/rimraf:215:14)
+    at rimrafSync (node:internal/fs/rimraf:196:7)
+    at node:internal/fs/rimraf:254:9
+    at Array.forEach (<anonymous>)
+    at _rmdirSync (node:internal/fs/rimraf:251:7)
+    at rimrafSync (node:internal/fs/rimraf:194:7)
+    at Object.rmSync (node:fs:1246:10)
+---
+[AUDIT] fs.unlinkSync pid=73108 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-1VEQcL/server.log
+    at fs.<computed> (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at _unlinkSync (node:internal/fs/rimraf:215:14)
+    at rimrafSync (node:internal/fs/rimraf:196:7)
+    at node:internal/fs/rimraf:254:9
+    at Array.forEach (<anonymous>)
+    at _rmdirSync (node:internal/fs/rimraf:251:7)
+    at rimrafSync (node:internal/fs/rimraf:194:7)
+    at Object.rmSync (node:fs:1246:10)
+---
+[AUDIT] fs.writeFileSync pid=73436 ppid=73108 cwd=/private/var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-server-cZbtbH
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-F9ldl1/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at startServerDaemon (file:///Users/wolf/Desktop/lansync/src/server.js:661:3)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async handleServerCommand (file:///Users/wolf/Desktop/lansync/src/cli.js:143:22)
+    at async main (file:///Users/wolf/Desktop/lansync/src/cli.js:36:9)
+---
+[AUDIT] fs.appendFileSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-6gG4Bx/server.log
+    at fs.<computed> [as appendFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at log (file:///Users/wolf/Desktop/lansync/src/server.js:29:8)
+    at finish (file:///Users/wolf/Desktop/lansync/src/server.js:351:5)
+    at ChildProcess.<anonymous> (file:///Users/wolf/Desktop/lansync/src/server.js:366:5)
+    at ChildProcess.emit (node:events:519:28)
+    at maybeClose (node:internal/child_process:1101:16)
+    at ChildProcess._handle.onexit (node:internal/child_process:304:5)
+---
+[AUDIT] fs.writeFileSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-6gG4Bx/server.log
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at Object.appendFileSync (node:fs:2519:6)
+    at fs.<computed> [as appendFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:18:17)
+    at log (file:///Users/wolf/Desktop/lansync/src/server.js:29:8)
+    at finish (file:///Users/wolf/Desktop/lansync/src/server.js:351:5)
+    at ChildProcess.<anonymous> (file:///Users/wolf/Desktop/lansync/src/server.js:366:5)
+    at ChildProcess.emit (node:events:519:28)
+    at maybeClose (node:internal/child_process:1101:16)
+---
+[AUDIT] fs.unlinkSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-6gG4Bx/server.json
+    at fs.<computed> (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at _unlinkSync (node:internal/fs/rimraf:215:14)
+    at rimrafSync (node:internal/fs/rimraf:196:7)
+    at node:internal/fs/rimraf:254:9
+    at Array.forEach (<anonymous>)
+    at _rmdirSync (node:internal/fs/rimraf:251:7)
+    at rimrafSync (node:internal/fs/rimraf:194:7)
+    at Object.rmSync (node:fs:1246:10)
+---
+[AUDIT] fs.unlinkSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-6gG4Bx/server.log
+    at fs.<computed> (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at _unlinkSync (node:internal/fs/rimraf:215:14)
+    at rimrafSync (node:internal/fs/rimraf:196:7)
+    at node:internal/fs/rimraf:254:9
+    at Array.forEach (<anonymous>)
+    at _rmdirSync (node:internal/fs/rimraf:251:7)
+    at rimrafSync (node:internal/fs/rimraf:194:7)
+    at Object.rmSync (node:fs:1246:10)
+---
+[AUDIT] fs.writeFileSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-iewJFX/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at TestContext.<anonymous> (file:///Users/wolf/Desktop/lansync/test/test-exec.js:43:5)
+    at TestHook.runInAsyncScope (node:async_hooks:214:14)
+    at TestHook.run (node:internal/test_runner/test:1047:25)
+    at TestHook.run (node:internal/test_runner/test:1354:18)
+    at Suite.runHook (node:internal/test_runner/test:965:20)
+    at Test.run (node:internal/test_runner/test:1022:27)
+---
+[AUDIT] fs.writeFileSync pid=73436 ppid=73108 cwd=/private/var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-server-cZbtbH
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-F9ldl1/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at startServerDaemon (file:///Users/wolf/Desktop/lansync/src/server.js:697:3)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async handleServerCommand (file:///Users/wolf/Desktop/lansync/src/cli.js:143:22)
+    at async main (file:///Users/wolf/Desktop/lansync/src/cli.js:36:9)
+---
+[AUDIT] fs.appendFileSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-iewJFX/server.log
+    at fs.<computed> [as appendFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at log (file:///Users/wolf/Desktop/lansync/src/server.js:29:8)
+    at finish (file:///Users/wolf/Desktop/lansync/src/server.js:351:5)
+    at ChildProcess.<anonymous> (file:///Users/wolf/Desktop/lansync/src/server.js:366:5)
+    at ChildProcess.emit (node:events:519:28)
+    at maybeClose (node:internal/child_process:1101:16)
+    at ChildProcess._handle.onexit (node:internal/child_process:304:5)
+---
+[AUDIT] fs.writeFileSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-iewJFX/server.log
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at Object.appendFileSync (node:fs:2519:6)
+    at fs.<computed> [as appendFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:18:17)
+    at log (file:///Users/wolf/Desktop/lansync/src/server.js:29:8)
+    at finish (file:///Users/wolf/Desktop/lansync/src/server.js:351:5)
+    at ChildProcess.<anonymous> (file:///Users/wolf/Desktop/lansync/src/server.js:366:5)
+    at ChildProcess.emit (node:events:519:28)
+    at maybeClose (node:internal/child_process:1101:16)
+---
+[AUDIT] fs.writeFileSync pid=73448 ppid=73108 cwd=/private/var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-client-FoJN7T
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-F9ldl1/client.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeClientConfig (file:///Users/wolf/Desktop/lansync/src/config.js:49:6)
+    at handleClientCommand (file:///Users/wolf/Desktop/lansync/src/cli.js:251:7)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async main (file:///Users/wolf/Desktop/lansync/src/cli.js:39:9)
+---
+[AUDIT] fs.unlinkSync pid=73483 ppid=73108 cwd=/private/var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-server-cZbtbH
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-F9ldl1/server.json
+    at fs.<computed> [as unlinkSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at stopServerDaemon (file:///Users/wolf/Desktop/lansync/src/server.js:717:8)
+    at handleServerCommand (file:///Users/wolf/Desktop/lansync/src/cli.js:154:23)
+    at main (file:///Users/wolf/Desktop/lansync/src/cli.js:36:15)
+    at file:///Users/wolf/Desktop/lansync/src/cli.js:567:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:343:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:665:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+---
+[AUDIT] fs.unlinkSync pid=73108 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-F9ldl1/client.json
+    at fs.<computed> (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at _unlinkSync (node:internal/fs/rimraf:215:14)
+    at rimrafSync (node:internal/fs/rimraf:196:7)
+    at node:internal/fs/rimraf:254:9
+    at Array.forEach (<anonymous>)
+    at _rmdirSync (node:internal/fs/rimraf:251:7)
+    at rimrafSync (node:internal/fs/rimraf:194:7)
+    at Object.rmSync (node:fs:1246:10)
+---
+[AUDIT] fs.unlinkSync pid=73108 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-F9ldl1/server.log
+    at fs.<computed> (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at _unlinkSync (node:internal/fs/rimraf:215:14)
+    at rimrafSync (node:internal/fs/rimraf:196:7)
+    at node:internal/fs/rimraf:254:9
+    at Array.forEach (<anonymous>)
+    at _rmdirSync (node:internal/fs/rimraf:251:7)
+    at rimrafSync (node:internal/fs/rimraf:194:7)
+    at Object.rmSync (node:fs:1246:10)
+---
+[AUDIT] fs.writeFileSync pid=73514 ppid=73108 cwd=/private/var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-server-ExZhJr
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-1IyMF2/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at startServerDaemon (file:///Users/wolf/Desktop/lansync/src/server.js:661:3)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async handleServerCommand (file:///Users/wolf/Desktop/lansync/src/cli.js:143:22)
+    at async main (file:///Users/wolf/Desktop/lansync/src/cli.js:36:9)
+---
+[AUDIT] fs.writeFileSync pid=73514 ppid=73108 cwd=/private/var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-server-ExZhJr
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-1IyMF2/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at startServerDaemon (file:///Users/wolf/Desktop/lansync/src/server.js:697:3)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async handleServerCommand (file:///Users/wolf/Desktop/lansync/src/cli.js:143:22)
+    at async main (file:///Users/wolf/Desktop/lansync/src/cli.js:36:9)
+---
+[AUDIT] fs.writeFileSync pid=73526 ppid=73108 cwd=/private/var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-client-2fOsBf
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-1IyMF2/client.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeClientConfig (file:///Users/wolf/Desktop/lansync/src/config.js:49:6)
+    at handleClientCommand (file:///Users/wolf/Desktop/lansync/src/cli.js:251:7)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async main (file:///Users/wolf/Desktop/lansync/src/cli.js:39:9)
+---
+[AUDIT] fs.unlinkSync pid=73559 ppid=73108 cwd=/private/var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-server-ExZhJr
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-1IyMF2/server.json
+    at fs.<computed> [as unlinkSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at stopServerDaemon (file:///Users/wolf/Desktop/lansync/src/server.js:717:8)
+    at handleServerCommand (file:///Users/wolf/Desktop/lansync/src/cli.js:154:23)
+    at main (file:///Users/wolf/Desktop/lansync/src/cli.js:36:15)
+    at file:///Users/wolf/Desktop/lansync/src/cli.js:567:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:343:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:665:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+---
+[AUDIT] fs.unlinkSync pid=73108 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-1IyMF2/client.json
+    at fs.<computed> (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at _unlinkSync (node:internal/fs/rimraf:215:14)
+    at rimrafSync (node:internal/fs/rimraf:196:7)
+    at node:internal/fs/rimraf:254:9
+    at Array.forEach (<anonymous>)
+    at _rmdirSync (node:internal/fs/rimraf:251:7)
+    at rimrafSync (node:internal/fs/rimraf:194:7)
+    at Object.rmSync (node:fs:1246:10)
+---
+[AUDIT] fs.unlinkSync pid=73108 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-1IyMF2/server.log
+    at fs.<computed> (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at _unlinkSync (node:internal/fs/rimraf:215:14)
+    at rimrafSync (node:internal/fs/rimraf:196:7)
+    at node:internal/fs/rimraf:254:9
+    at Array.forEach (<anonymous>)
+    at _rmdirSync (node:internal/fs/rimraf:251:7)
+    at rimrafSync (node:internal/fs/rimraf:194:7)
+    at Object.rmSync (node:fs:1246:10)
+---
+[AUDIT] fs.writeFileSync pid=73590 ppid=73108 cwd=/private/var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-server-kkiYry
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-mzk1gI/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at startServerDaemon (file:///Users/wolf/Desktop/lansync/src/server.js:661:3)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async handleServerCommand (file:///Users/wolf/Desktop/lansync/src/cli.js:143:22)
+    at async main (file:///Users/wolf/Desktop/lansync/src/cli.js:36:9)
+---
+[AUDIT] fs.writeFileSync pid=73590 ppid=73108 cwd=/private/var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-server-kkiYry
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-mzk1gI/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at startServerDaemon (file:///Users/wolf/Desktop/lansync/src/server.js:697:3)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async handleServerCommand (file:///Users/wolf/Desktop/lansync/src/cli.js:143:22)
+    at async main (file:///Users/wolf/Desktop/lansync/src/cli.js:36:9)
+---
+[AUDIT] fs.writeFileSync pid=73603 ppid=73108 cwd=/private/var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-client-B3XAbH
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-mzk1gI/client.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeClientConfig (file:///Users/wolf/Desktop/lansync/src/config.js:49:6)
+    at handleClientCommand (file:///Users/wolf/Desktop/lansync/src/cli.js:251:7)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async main (file:///Users/wolf/Desktop/lansync/src/cli.js:39:9)
+---
+[AUDIT] fs.unlinkSync pid=73636 ppid=73108 cwd=/private/var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-server-kkiYry
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-mzk1gI/server.json
+    at fs.<computed> [as unlinkSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at stopServerDaemon (file:///Users/wolf/Desktop/lansync/src/server.js:717:8)
+    at handleServerCommand (file:///Users/wolf/Desktop/lansync/src/cli.js:154:23)
+    at main (file:///Users/wolf/Desktop/lansync/src/cli.js:36:15)
+    at file:///Users/wolf/Desktop/lansync/src/cli.js:567:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:343:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:665:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+---
+[AUDIT] fs.unlinkSync pid=73108 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-mzk1gI/client.json
+    at fs.<computed> (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at _unlinkSync (node:internal/fs/rimraf:215:14)
+    at rimrafSync (node:internal/fs/rimraf:196:7)
+    at node:internal/fs/rimraf:254:9
+    at Array.forEach (<anonymous>)
+    at _rmdirSync (node:internal/fs/rimraf:251:7)
+    at rimrafSync (node:internal/fs/rimraf:194:7)
+    at Object.rmSync (node:fs:1246:10)
+---
+[AUDIT] fs.unlinkSync pid=73108 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-mzk1gI/server.log
+    at fs.<computed> (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at _unlinkSync (node:internal/fs/rimraf:215:14)
+    at rimrafSync (node:internal/fs/rimraf:196:7)
+    at node:internal/fs/rimraf:254:9
+    at Array.forEach (<anonymous>)
+    at _rmdirSync (node:internal/fs/rimraf:251:7)
+    at rimrafSync (node:internal/fs/rimraf:194:7)
+    at Object.rmSync (node:fs:1246:10)
+---
+[AUDIT] fs.writeFileSync pid=73667 ppid=73108 cwd=/private/var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-server-zleVmI
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-7I0vFc/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at startServerDaemon (file:///Users/wolf/Desktop/lansync/src/server.js:661:3)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async handleServerCommand (file:///Users/wolf/Desktop/lansync/src/cli.js:143:22)
+    at async main (file:///Users/wolf/Desktop/lansync/src/cli.js:36:9)
+---
+[AUDIT] fs.writeFileSync pid=73667 ppid=73108 cwd=/private/var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-server-zleVmI
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-config-7I0vFc/server.json
+    at fs.<computed> [as writeFileSync] (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at writeServerConfig (file:///Users/wolf/Desktop/lansync/src/config.js:34:6)
+    at startServerDaemon (file:///Users/wolf/Desktop/lansync/src/server.js:697:3)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async handleServerCommand (file:///Users/wolf/Desktop/lansync/src/cli.js:143:22)
+    at async main (file:///Users/wolf/Desktop/lansync/src/cli.js:36:9)
+---
+[AUDIT] fs.unlinkSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-iewJFX/server.json
+    at fs.<computed> (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at _unlinkSync (node:internal/fs/rimraf:215:14)
+    at rimrafSync (node:internal/fs/rimraf:196:7)
+    at node:internal/fs/rimraf:254:9
+    at Array.forEach (<anonymous>)
+    at _rmdirSync (node:internal/fs/rimraf:251:7)
+    at rimrafSync (node:internal/fs/rimraf:194:7)
+    at Object.rmSync (node:fs:1246:10)
+---
+[AUDIT] fs.unlinkSync pid=73107 ppid=73104 cwd=/Users/wolf/Desktop/lansync
+  -> /var/folders/pt/0bdfmc6j2mv3g9fjk2px77140000gp/T/lansyncopt-exec-config-iewJFX/server.log
+    at fs.<computed> (/Users/wolf/Desktop/lansync/diag-audit.cjs:14:116)
+    at _unlinkSync (node:internal/fs/rimraf:215:14)
+    at rimrafSync (node:internal/fs/rimraf:196:7)
+    at node:internal/fs/rimraf:254:9
+    at Array.forEach (<anonymous>)
+    at _rmdirSync (node:internal/fs/rimraf:251:7)
+    at rimrafSync (node:internal/fs/rimraf:194:7)
+    at Object.rmSync (node:fs:1246:10)
+---

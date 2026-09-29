@@ -1,0 +1,72 @@
+From cd6806b790f836e1bfcb865305d3a1bfcc68834a Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=E6=B2=90=E9=AA=81?= <lihantian.lht@antgroup.com>
+Date: Wed, 30 Sep 2026 02:58:00 +0800
+Subject: [PATCH] =?UTF-8?q?fix(tests):=20restore=20LANSNC=5FCONFIG=5FDIR?=
+ =?UTF-8?q?=20after=20override=20test=20=E2=80=94=20the=20real=20401=20cul?=
+ =?UTF-8?q?prit?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Windows fs-audit evidence (diag-hits.log): test-config.js "honors
+LANSNC_CONFIG_DIR override" deleted the env var without restoring it,
+so every later config write in that process fell back to os.homedir()
+and overwrote the REAL ~/.lansyncopt/server.json + client.json with
+test fixtures (test-config.js:58/72). The live daemon re-reads config
+per request, so it switched tokens mid-suite — every npm test run on
+Windows detokenized 8001. macOS was equally affected, just invisible
+(no live server there). The module-top isolation fix closed most
+writes but could not survive a mid-file delete, hence the double belt:
+per-test re-pin in beforeEach + save/restore in the override test.
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+---
+ test/test-config.js | 20 ++++++++++++++++++--
+ 1 file changed, 18 insertions(+), 2 deletions(-)
+
+diff --git a/test/test-config.js b/test/test-config.js
+index ca52bd9..73aa521 100644
+--- a/test/test-config.js
++++ b/test/test-config.js
+@@ -19,10 +19,17 @@ describe('config module', () => {
+     originalHome = process.env.HOME;
+     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lansync-test-'));
+     process.env.HOME = tmpDir;
++    // 双保险:模块顶层已设隔离,但任何用例中途 delete 都会让后续用例
++    // 回落 os.homedir() 写真实 ~/.lansyncopt(Windows 实测事故:test-config
++    // :58/72 把活 server 的配置覆盖,daemon 每请求重读配置即刻换 token)。
++    // 每个用例都重新钉一遍。
++    process.env.LANSNC_CONFIG_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'lansyncopt-test-config-'));
+   });
+ 
+   afterEach(() => {
+     process.env.HOME = originalHome;
++    // 不 delete、也不还原到「无值」:保持在本文件的隔离目录上,
++    // 目录本体由模块顶层创建,文件进程结束一起消失
+   });
+ 
+   describe('getConfigDir', () => {
+@@ -41,9 +48,18 @@ describe('config module', () => {
+     });
+ 
+     it('honors LANSNC_CONFIG_DIR override', () => {
++      // 此用例本身在动 env:结束时必须恢复(否则摘隔离,后续用例写盘穿透)
++      const saved = process.env.LANSNC_CONFIG_DIR;
+       process.env.LANSNC_CONFIG_DIR = '/tmp/custom-config';
+-      assert.strictEqual(getConfigDir(), '/tmp/custom-config');
+-      delete process.env.LANSNC_CONFIG_DIR;
++      try {
++        assert.strictEqual(getConfigDir(), '/tmp/custom-config');
++      } finally {
++        if (saved !== undefined) {
++          process.env.LANSNC_CONFIG_DIR = saved;
++        } else {
++          delete process.env.LANSNC_CONFIG_DIR;
++        }
++      }
+     });
+   });
+ 
+-- 
+2.39.3 (Apple Git-146)
+

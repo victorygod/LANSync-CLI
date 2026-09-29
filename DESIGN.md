@@ -149,7 +149,8 @@ function sanitizePath(requestedPath, rootDir) {
 
 ```bash
 lansync server start              # 启动后台服务，返回 IP:port
-lansync server stop               # 停止服务
+lansync server stop [-y]          # 停止服务;stop 后核对端口真相,发现孤儿占用
+                                  # 则展示 PID 并交互确认硬杀(非 TTY 默认不动)
 lansync server status             # 输出 IP:port、根目录、运行状态
 ```
 
@@ -159,6 +160,7 @@ lansync server status             # 输出 IP:port、根目录、运行状态
 lansync client config <ip:port>   # 配置服务器地址（同时记录当前工作目录）
 lansync pull [pattern] [--no-delete]  # 拉取文件（无参数=完整同步）
 lansync push [pattern] [--no-delete]  # 推送文件（无参数=完整同步）
+lansync diff [pattern] [--json]   # 清单级 diff：比较本地与 server（只读，不传输）
 lansync client status             # 查看当前配置
 ```
 
@@ -168,6 +170,35 @@ lansync client status             # 查看当前配置
 |------|------|
 | `pattern` | 可选，glob 模式过滤文件，如 `*.js` 或 `src/**` |
 | `--no-delete` | 不删除目标端多余文件，只同步新增和修改的文件 |
+| `--json`（diff） | machine-friendly 输出；stdout 只含 JSON |
+
+### 5.4 diff（清单级对账）
+
+只读命令：一次 `/api/list` + 本地扫描，零协议改动，不做任何传输/删除。
+回答「两边是否同步、差异在哪些文件」。
+
+设计要点：
+
+- **判定只用 hash**，不复用 push/pull 的 mtime+size 快路径——diff 是事实报告，
+  走快路径会出现「diff 说 modified、push 却说 skip」的自相矛盾
+- **不偏向 push/pull 任何一方**：status 只有 `modified` / `local-only` / `server-only`
+  三态，方向（上传还是下载）留给后续 push/pull 决定
+- 被忽略文件（.gitignore + 默认规则）不参与 diff；输出按 path 排序，
+  两次结果可做位置对比
+- server 目录不存在**不算错误**（与 pull 不同）：此时 server 清单为空，
+  本地文件如实报告为 local-only——diff 只读，无需 pull 那样的防误删保护
+
+返回值三层：**退出码**（0=完全同步，1=有差异，2=错误）；
+**`--json`**（`{ inSync, files[{path,status,local,server}], summary }`）；
+**人类输出**（git-status 风格 `M/+/-` 加统计行）：
+
+```
+  M  src/server.js  local 12595B / server 12180B
+  +  notes.md  only in local
+  -  old.js  only in server
+
+1 modified, 1 local-only, 1 server-only, 20 in sync
+```
 
 ## 六、核心流程
 
@@ -512,7 +543,7 @@ lansync server start
 | 大文件 | 流式传输，不一次性读入内存 |
 | 路径遍历攻击 | Server 校验 `..` 和路径边界，返回 403 |
 | 执行目录在工作目录外 | 拒绝执行，提示 "Must run inside workDir: <path>" |
-| 同步完成后有空目录 | 自动清理空目录 |
+| 同步完成后有空目录 | 自动清理空目录（git 式修剪：pull 侧 client 本地清理；push 侧 server 删除文件成功后向上逐级 rmdir 空目录，到 rootDir 为止，非空即停，root 永不修剪） |
 
 ## 十四、命令行输出示例
 
