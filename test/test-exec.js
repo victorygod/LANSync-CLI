@@ -35,12 +35,12 @@ describe('/api/exec', () => {
   let token;
 
   beforeEach(async () => {
-    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lansyncopt-exec-root-'));
-    configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lansyncopt-exec-config-'));
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lansync-exec-root-'));
+    configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lansync-exec-config-'));
     process.env.LANSNC_CONFIG_DIR = configDir;
 
     token = deriveToken(PASSWORD);
-    writeServerConfig({ pid: process.pid, port: 0, rootDir, ip: '127.0.0.1', token, policy: 'exec-block-black' });
+    writeServerConfig({ pid: process.pid, port: 0, rootDir, ip: '127.0.0.1', token, policy: 'normal' });
 
     server = createServer(rootDir);
     await new Promise(resolve => server.listen(0, resolve));
@@ -85,16 +85,16 @@ describe('/api/exec', () => {
     assert.strictEqual(res.status, 401);
   });
 
-  it('rejects everything under exec-forbidden (403)', async () => {
-    setPolicy('exec-forbidden');
+  it('rejects everything under off (403)', async () => {
+    setPolicy('off');
     const res = await exec('echo hi');
     assert.strictEqual(res.status, 403);
     const data = await res.json();
-    assert.ok(data.error.includes('exec-forbidden'));
+    assert.ok(data.error.includes('policy=off'));
   });
 
-  it('runs any command under exec-all-allow', async () => {
-    setPolicy('exec-all-allow');
+  it('runs any command under all', async () => {
+    setPolicy('all');
     const res = await exec('docker system prune');
     assert.strictEqual(res.status, 200);
   });
@@ -117,13 +117,24 @@ describe('/api/exec', () => {
     assert.strictEqual(res.status, 403);
   });
 
-  it('gray command allowed in exec-block-black, blocked in exec-block-black-gray', async () => {
+  it('gray command allowed in normal, blocked in strict', async () => {
     const res1 = await exec('docker system prune');
     assert.strictEqual(res1.status, 200);
 
-    setPolicy('exec-block-black-gray');
+    setPolicy('strict');
     const res2 = await exec('docker system prune');
     assert.strictEqual(res2.status, 403);
+  });
+
+  it('server.json holding a legacy long name falls back to normal (effective value)', async () => {
+    // 旧长名自 v1.5.0 起是未识别值:server 兜成 normal——黑名单仍拦,灰名单放行
+    setPolicy('exec-block-black');
+    assert.strictEqual((await exec('docker system prune')).status, 200);
+    assert.strictEqual((await exec('rm -rf /')).status, 403);
+    const res = await fetch(`http://localhost:${port}/api/auth`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    assert.strictEqual((await res.json()).policy, 'normal');
   });
 
   it('/api/auth accepts matching token and returns policy', async () => {
@@ -133,7 +144,7 @@ describe('/api/exec', () => {
     assert.strictEqual(res.status, 200);
     const data = await res.json();
     assert.strictEqual(data.ok, true);
-    assert.strictEqual(data.policy, 'exec-block-black');
+    assert.strictEqual(data.policy, 'normal');
   });
 
   it('/api/auth rejects wrong token (401)', async () => {

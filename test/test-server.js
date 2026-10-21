@@ -10,8 +10,8 @@ import { sanitizePath, getLocalIP, parseGitignore, shouldIgnore, getDefaultIgnor
 import { writeServerConfig, getConfigDir } from '../src/config.js';
 import { deriveToken } from '../src/policy.js';
 
-// 隔离配置目录,避免测试日志/状态读写污染真实 ~/.lansyncopt
-process.env.LANSNC_CONFIG_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'lansyncopt-config-'));
+// 隔离配置目录,避免测试日志/状态读写污染真实 ~/.lansync
+process.env.LANSNC_CONFIG_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'lansync-config-'));
 
 describe('server utilities', () => {
   describe('sanitizePath', () => {
@@ -236,7 +236,7 @@ describe('HTTP server', () => {
     fs.writeFileSync(path.join(tmpDir, 'sub', 'nested.txt'), 'nested content');
 
     token = deriveToken('test-password');
-    writeServerConfig({ pid: process.pid, port: 0, rootDir: tmpDir, ip: '127.0.0.1', token, policy: 'exec-forbidden' });
+    writeServerConfig({ pid: process.pid, port: 0, rootDir: tmpDir, ip: '127.0.0.1', token, policy: 'off' });
 
     server = createServer(tmpDir);
     await new Promise(resolve => server.listen(0, resolve));

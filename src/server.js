@@ -9,9 +9,14 @@ import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { minimatch } from 'minimatch';
 import { readServerConfig, writeServerConfig, getConfigDir } from './config.js';
-import { checkPolicy, detectSelfReference, DEFAULT_POLICY, DEFAULT_BLACKLIST, DEFAULT_GRAYLIST } from './policy.js';
+import { checkPolicy, detectSelfReference, resolvePolicy, DEFAULT_POLICY, DEFAULT_BLACKLIST, DEFAULT_GRAYLIST } from './policy.js';
 
 export const DEFAULT_PORT = 8001;
+
+// server.json 里的 policy 归一化:未识别值(旧 exec-* 长名 / 手改 / 大小写变体)
+// 兜成 DEFAULT_POLICY('normal'),与旧「未识别 → 仅黑名单兜底」行为等价(黑拦灰放)。
+// /api/auth、server status、handleExec 等所有读取点统一走这里,回显的都是生效值。
+const effectivePolicy = (v) => resolvePolicy(v) ?? DEFAULT_POLICY;
 const DEFAULT_MAX_CONCURRENT = 4;
 let activeExecs = 0;
 
@@ -256,12 +261,12 @@ function killExecTree(child) {
 async function handleExec(req, res, rootDir, config) {
   const ip = req.socket.remoteAddress || 'unknown';
 
-  // 策略门禁:exec-forbidden 直接拒(鉴权已在路由层通过,403 与 401 区分)
-  const policy = config.policy || DEFAULT_POLICY;
-  if (policy === 'exec-forbidden') {
-    log(`DENIED ip=${ip} reason=exec_forbidden`);
+  // 策略门禁:off 直接拒(鉴权已在路由层通过,403 与 401 区分)
+  const policy = effectivePolicy(config.policy);
+  if (policy === 'off') {
+    log(`DENIED ip=${ip} reason=exec_disabled`);
     res.writeHead(403, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: `Exec is forbidden on this server (policy=${policy})` }));
+    res.end(JSON.stringify({ error: 'Exec is disabled on this server (policy=off)' }));
     return;
   }
 
@@ -295,8 +300,8 @@ async function handleExec(req, res, rootDir, config) {
     return;
   }
 
-  // 分级拦截:黑名单优先,再按 policy 决定是否拦灰名单;exec-all-allow 跳过名单
-  if (policy !== 'exec-all-allow') {
+  // 分级拦截:黑名单优先,再按 policy 决定是否拦灰名单;all 跳过名单
+  if (policy !== 'all') {
     const blacklist = [...DEFAULT_BLACKLIST, ...(config.commandBlacklist || [])];
     const graylist = [...DEFAULT_GRAYLIST, ...(config.commandGraylist || [])];
     const decision = checkPolicy(command, policy, blacklist, graylist);
@@ -324,7 +329,7 @@ async function handleExec(req, res, rootDir, config) {
   // Windows 下 spawn(detached + shell:true) 时,cmd 自身的输出能进管道,
   // 但 cmd 再拉起的外部 exe(node 等)不会收到管道句柄,输出会凭空丢失。
   // 文件重定向(> file)对 Windows 的所有子进程都成立,是最可靠的捕获方式。
-  const execTmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lansyncopt-exec-'));
+  const execTmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lansync-exec-'));
   const outPath = path.join(execTmpDir, 'stdout.txt');
   const errPath = path.join(execTmpDir, 'stderr.txt');
   const outFd = fs.openSync(outPath, 'w');
@@ -406,9 +411,9 @@ export function createServer(rootDir) {
       }
 
       if (pathname === '/api/auth' && req.method === 'GET') {
-        // client config 验证口令用:鉴权已通过,回传 server 的 exec policy
+        // client config 验证口令用:鉴权已通过,回传 server 的 exec policy(归一生效值)
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ ok: true, policy: config.policy || DEFAULT_POLICY }));
+        res.end(JSON.stringify({ ok: true, policy: effectivePolicy(config.policy) }));
       } else if (pathname === '/api/list' && req.method === 'GET') {
         await handleList(url, rootDir, res);
       } else if (pathname === '/api/file' && req.method === 'GET') {
@@ -643,12 +648,14 @@ export async function killPidHard(pid) {
 }
 
 export async function startServerDaemon(rootDir, port = DEFAULT_PORT, token, policy = DEFAULT_POLICY) {
+  // 纵深防御:CLI 已归一,这里对程序化调用者再归一一遍后落盘
+  policy = effectivePolicy(policy);
   if (await isPortInUse(port)) {
     // 只拒绝、不杀:占用者可能是旧 lansync server 或其他应用,不能自动 kill。
     // 给出明确出路:换端口,或用对应命令停掉占用者。
     throw new Error(
-      `Port ${port} is in use. Either start on another port (lansyncopt server start --port <n>), ` +
-      `or stop the process holding it (lansyncopt server stop for a leftover daemon; ` +
+      `Port ${port} is in use. Either start on another port (lansync server start --port <n>), ` +
+      `or stop the process holding it (lansync server stop for a leftover daemon; ` +
       `lansync server stop if the old lansync server is running)`
     );
   }
@@ -747,7 +754,7 @@ export function getServerStatus() {
     rootDir: config.rootDir,
     ip: config.ip,
     url: `http://${config.ip}:${config.port}`,
-    policy: config.policy || DEFAULT_POLICY
+    policy: effectivePolicy(config.policy)
   };
 }
 

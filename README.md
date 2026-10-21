@@ -1,10 +1,13 @@
-# lansyncopt
+# lansync
 
 A minimal LAN file sync tool with optional remote command execution.
 
-> This is the `feature/remote-exec` branch of [lansync](https://github.com/wolf4ood/lansync),
-> published temporarily under the name `lansyncopt` so it can run side by side with an
-> existing `lansync` install (separate command, config dir, and server state).
+> The remote-exec capability was developed on `feature/remote-exec` and briefly
+> released under the temporary name `lansyncopt` (separate command and config
+> dir `~/.lansyncopt`) so it could run side by side with the older
+> file-sync-only `lansync`. It is now merged back under the name `lansync`.
+> If you upgrade from a `lansyncopt`-era install, re-run `server start` /
+> `client config` — configuration left in `~/.lansyncopt` is not migrated.
 
 ## Features
 
@@ -39,8 +42,10 @@ A minimal LAN file sync tool with optional remote command execution.
 ./setup.sh
 ```
 
-This installs lansyncopt to `~/.lansyncopt` and creates a global `lansyncopt` command.
-It does **not** touch an existing lansync install (`~/.lansync`, `lansync` command).
+This installs lansync to `~/.lansync` and creates a global `lansync` command.
+Running it over an existing install removes the whole directory first —
+including `client.json`/`server.json` — so re-run `client config` after
+reinstalling. `~/.lansyncopt` from the temporary release is left untouched.
 
 ### Manual Install
 
@@ -52,8 +57,8 @@ npm link
 ## Uninstallation
 
 ```bash
-rm -rf ~/.lansyncopt
-npm unlink -g lansyncopt
+rm -rf ~/.lansync
+npm unlink -g lansync
 ```
 
 ## Usage
@@ -61,46 +66,47 @@ npm unlink -g lansyncopt
 ### Server
 
 ```bash
-# Start sync server (default port 8001, default policy exec-forbidden).
+# Start sync server (default port 8001). Remote exec is ON by default at
+# the 'normal' mode (catastrophic blocklist enforced); change it with --exec.
 # Prompts for a password; every request must carry the matching token.
-lansyncopt server start
-lansyncopt server start --policy exec-block-black
+lansync server start
+lansync server start --exec strict
 
 # Stop server. stop verifies the port afterwards: if an orphan process still
 # holds it (lost config / killed half-start), it shows the owner PID and asks
 # to kill it interactively; -y kills without asking (agent-safe: non-TTY
 # stdin never blocks and defaults to "leave it running")
-lansyncopt server stop
-lansyncopt server stop -y
+lansync server stop
+lansync server stop -y
 
 # Check server status
-lansyncopt server status
+lansync server status
 ```
 
 ### Client
 
 ```bash
 # Configure server address + password (verified against the server; saves token)
-lansyncopt client config <ip:port>
+lansync client config <ip:port>
 
 # Pull files from server
-lansyncopt pull [pattern]
+lansync pull [pattern]
 
 # Push files to server
-lansyncopt push [pattern]
+lansync push [pattern]
 
 # Pull without deleting local files
-lansyncopt pull --no-delete
+lansync pull --no-delete
 
 # Push without deleting remote files
-lansyncopt push --no-delete
+lansync push --no-delete
 
 # Check whether local and server are in sync - no transfer, no deletion.
 # Prints modified / local-only / server-only files; --json for agents.
 # Exit code: 0 = in sync, 1 = differs, 2 = error
-lansyncopt diff
-lansyncopt diff src
-lansyncopt diff --json
+lansync diff
+lansync diff src
+lansync diff --json
 ```
 
 ### Authentication
@@ -113,18 +119,19 @@ Supply it via `LANSNC_PASSWORD` for non-interactive use.
 
 ### Remote command execution
 
-Exec is controlled by the server-side `--policy` at start; the default
-`exec-forbidden` keeps remote commands off until you opt in:
+Exec is controlled by the server-side `--exec <mode>` at start. The default
+`normal` enables remote execution with the catastrophic blocklist enforced;
+values are case-insensitive:
 
 ```bash
-#   --policy exec-forbidden        remote commands disabled (default)
-#   --policy exec-all-allow        allow everything
-#   --policy exec-block-black      block blacklist, allow graylist
-#   --policy exec-block-black-gray block blacklist and graylist
+#   --exec off       remote commands disabled
+#   --exec normal    block blacklist, allow graylist (default)
+#   --exec strict    block blacklist and graylist
+#   --exec all       allow everything
 
 # Run a command on the server (quote the whole command)
-lansyncopt exec "git pull"
-lansyncopt exec --json "npm test"   # machine-readable output for agents
+lansync exec "git pull"
+lansync exec --json "npm test"   # machine-readable output for agents
 ```
 
 Behavior notes for `exec`:
@@ -133,7 +140,7 @@ Behavior notes for `exec`:
 - If the client is killed (e.g. an agent timeout), the connection drops and the
   server kills the whole remote process group
 - Blacklist/graylist hits return an error containing `blocked`
-- Every execution is written to the audit log (`~/.lansyncopt/server.log`)
+- Every execution is written to the audit log (`~/.lansync/server.log`)
 - Commands run via the platform shell (`cmd.exe` on Windows). The server
   switches the console to UTF-8 (`chcp 65001`) before executing, so even
   Windows builtins (`taskkill`, `dir`) emit UTF-8 and never garble over the
@@ -143,13 +150,13 @@ Behavior notes for `exec`:
 
 ```bash
 # Sync a specific file
-lansyncopt pull file.txt
+lansync pull file.txt
 
 # Sync an entire directory (recursive)
-lansyncopt pull src
+lansync pull src
 
 # Sync with glob pattern
-lansyncopt pull "src/**/*.js"
+lansync pull "src/**/*.js"
 
 # Pattern only affects matched files - others are left untouched
 # When pattern is specified, files outside the pattern are NOT deleted
@@ -197,15 +204,15 @@ behaves identically:
 
 ```bash
 # On machine A (server)
-lansyncopt server start --policy exec-block-black
+lansync server start --exec strict
 # Server running at http://192.168.1.100:8001
 
 # On machine B (client)
-lansyncopt client config 192.168.1.100:8001   # prompts for the same password
-lansyncopt pull              # Sync all files
-lansyncopt pull "src/**"     # Sync only src directory
-lansyncopt push              # Push local changes to server
-lansyncopt exec "npm test"   # Run tests on machine A
+lansync client config 192.168.1.100:8001   # prompts for the same password
+lansync pull              # Sync all files
+lansync pull "src/**"     # Sync only src directory
+lansync push              # Push local changes to server
+lansync exec "npm test"   # Run tests on machine A
 ```
 
 ## Design

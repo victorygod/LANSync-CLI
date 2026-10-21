@@ -17,7 +17,7 @@
 | 安全支柱 | 说明 |
 |---------|------|
 | **鉴权** | 口令 → token,所有 `/api/*` 无 token 拒绝执行(pull/push/exec 全量鉴权) |
-| **分级管控** | 黑名单 + 灰名单 + `--policy`,作为纵深防御(见第四节) |
+| **分级管控** | 黑名单 + 灰名单 + `--exec`,作为纵深防御(见第四节) |
 | **审计** | 每次执行记录时间、来源 IP、命令、退出码、耗时 |
 | **可撤销** | `server stop` 后 daemon 消失、配置删除;并发上限防资源耗尽 |
 
@@ -55,24 +55,25 @@ token = HMAC-SHA256(key = 口令, msg = "lansync-cli-v1")
 
 「任意 shell 命令」模式下,单纯黑名单有两个痛点:**灾难性命令**必须拦,但**高频、功能强大的半安全命令**(`sudo`、`kill`、`git reset --hard`、`docker prune`、卸载类)如果也一刀切进黑名单,会严重影响 agent 日常操作。
 
-因此采用**三级分级**,由 server 在 `server start` 时通过 `--policy` 参数选择:
+因此采用**三级分级**,由 server 在 `server start` 时通过 `--exec` 参数选择:
 
 | 层级 | 标准 | 例子 | 拦截时机 |
 |------|------|------|---------|
-| **黑名单** | 灾难性 / 不可逆 / 攻击性 | `rm -rf /`、`mkfs`、`format`、`shutdown`、fork 炸弹、LOLBin 持久化、杀 server 自身 | `exec-block-black`、`exec-block-black-gray` 都拦 |
-| **灰名单** | 高频、功能强大、半安全(可能误伤/局部不可逆,但非灾难) | `sudo`、`kill`/`pkill`、`rm`(定向)、`git reset --hard`、`git push --force`、`systemctl restart`、`docker system prune`、`npm uninstall`/`publish` | 仅 `exec-block-black-gray` 拦 |
+| **黑名单** | 灾难性 / 不可逆 / 攻击性 | `rm -rf /`、`mkfs`、`format`、`shutdown`、fork 炸弹、LOLBin 持久化、杀 server 自身 | `normal`、`strict` 都拦 |
+| **灰名单** | 高频、功能强大、半安全(可能误伤/局部不可逆,但非灾难) | `sudo`、`kill`/`pkill`、`rm`(定向)、`git reset --hard`、`git push --force`、`systemctl restart`、`docker system prune`、`npm uninstall`/`publish` | 仅 `strict` 拦 |
 | **其余(隐式白名单)** | 低风险 / 可逆 / 只读 | `git pull`、`npm install`、`npm test`、`ls`、`cat` | 始终允许 |
 
-`server start` 的 `--policy` 取值:
+`server start` 的 `--exec` 取值:
 
 | 取值 | 含义 | 适用场景 |
 |------|------|---------|
-| `exec-forbidden` | 远程命令整体关闭(默认),文件同步不受影响 | 只做文件同步,不开执行面 |
-| `exec-all-allow` | 全允许,黑灰都不拦 | 完全可信的单机 / 实验环境 |
-| `exec-block-black` | **屏蔽黑**,灰名单放行 | 常规 agent 场景:允许高频命令,拦灾难性破坏 |
-| `exec-block-black-gray` | 屏蔽黑灰,黑+灰都拦 | 最严格,只放行低风险命令 |
+| `off` | 远程命令整体关闭,文件同步不受影响 | 只做文件同步,不开执行面 |
+| `normal` | **屏蔽黑**,灰名单放行(**默认**) | 常规 agent 场景:允许高频命令,拦灾难性破坏 |
+| `strict` | 屏蔽黑灰,黑+灰都拦 | 最严格,只放行低风险命令 |
+| `all` | 全允许,黑灰都不拦 | 完全可信的单机 / 实验环境 |
 
 > **全新 API,不兼容旧名**:`allow-all` / `block-black` / `block-black-gray` 不再是合法值,`server start` 校验直接拒绝;配置里残留旧值不做映射,仅黑名单兜底。
+> **v1.5.0(2026-10-19)取值更名**:参数名 `--policy` → `--exec`,取值 `off / normal / strict / all`(默认 `normal`),大小写不敏感;`exec-*` 旧长名非法,`server start` 校验直接拒绝,详见 devlog v1.5.0 节。
 
 ### 4.1 定位与局限
 
@@ -98,9 +99,9 @@ token = HMAC-SHA256(key = 口令, msg = "lansync-cli-v1")
 
 ### 4.3 默认分级清单
 
-**匹配顺序:黑名单优先于灰名单。** 命令先与黑名单比对,命中即拦(除非 `exec-all-allow`);未命中再与灰名单比对,命中则在 `exec-block-black-gray` 模式下拦。因此「全盘/灾难」的精确定位(如 `rm -rf /`、`find / -delete`、`sudo su`)放黑名单,泛化形式(如 `rm`、`sudo`)放灰名单,靠顺序区分。
+**匹配顺序:黑名单优先于灰名单。** 命令先与黑名单比对,命中即拦(除非 `all`);未命中再与灰名单比对,命中则在 `strict` 模式下拦。因此「全盘/灾难」的精确定位(如 `rm -rf /`、`find / -delete`、`sudo su`)放黑名单,泛化形式(如 `rm`、`sudo`)放灰名单,靠顺序区分。
 
-**① 默认黑名单(灾难性,除 `exec-all-allow` 外都拦):**
+**① 默认黑名单(灾难性,除 `all` 外都拦):**
 
 ```js
 const DEFAULT_COMMAND_BLACKLIST = [
@@ -206,7 +207,7 @@ const DEFAULT_COMMAND_BLACKLIST = [
 ];
 ```
 
-**② 默认灰名单(高频半安全,仅 `exec-block-black-gray` 模式拦):**
+**② 默认灰名单(高频半安全,仅 `strict` 模式拦):**
 
 ```js
 const DEFAULT_COMMAND_GRAYLIST = [
@@ -271,7 +272,7 @@ const DEFAULT_COMMAND_GRAYLIST = [
 
 > **黑名单的边界**:下载并执行类(LOLBin)是军备竞赛,列不完;`rm`/`del` 的混淆变体(`rm -r -f`、`$(...)` 拼接、编码)同理。这一层只兜「明显/意外的破坏」,真正的边界靠鉴权 + 审计 + 后续沙箱隔离(见 4.5 ④)。
 
-> **`sudo` 分级说明**:`sudo` 在灰名单(`exec-block-black` 模式放行),但 `sudo su`/`sudo -i`/`sudo -s`/`sudo bash` 这类「拿到交互 shell」仍在黑名单。灰名单里的 `rm`/`sudo`/`kill`/`del` 是泛化前缀,靠「黑名单优先」与上面对应的全盘/全家精确项区分。
+> **`sudo` 分级说明**:`sudo` 在灰名单(`normal` 模式放行),但 `sudo su`/`sudo -i`/`sudo -s`/`sudo bash` 这类「拿到交互 shell」仍在黑名单。灰名单里的 `rm`/`sudo`/`kill`/`del` 是泛化前缀,靠「黑名单优先」与上面对应的全盘/全家精确项区分。
 
 ### 4.4 可配置与 policy
 
@@ -280,7 +281,7 @@ const DEFAULT_COMMAND_GRAYLIST = [
 ```jsonc
 // server.json
 {
-  "policy": "exec-block-black",   // exec-forbidden | exec-all-allow | exec-block-black | exec-block-black-gray
+  "policy": "normal",   // off | all | normal | strict
   "commandBlacklist": [
     "rm -rf /",
     "shutdown",
@@ -300,7 +301,7 @@ const DEFAULT_COMMAND_GRAYLIST = [
 }
 ```
 
-`policy` 由 `server start --policy` 写入,也可直接改配置后重启生效。
+`policy` 由 `server start --exec` 写入,也可直接改配置后重启生效。
 
 ### 4.5 Server 本进程与自身文件保护
 
@@ -424,7 +425,7 @@ POST /api/exec
 **Server 管理:**
 
 ```bash
-lansyncopt server start [--port <n>] [--policy <m>]  # 启动服务(必输口令;默认端口 8001、策略 exec-forbidden)
+lansync server start [--port <n>] [--exec <m>]  # 启动服务(必输口令;默认端口 8001、exec 默认 normal)
 lansyncopt server stop                  # 停止服务
 lansyncopt server status                # 查看服务状态(含 policy)
 ```
@@ -456,7 +457,7 @@ lansyncopt --version | -v              # 版本号
 lansyncopt --help | -h                 # 帮助
 ```
 
-`--policy` 取值:`exec-forbidden`(关闭远程命令,默认)/ `exec-all-allow`(全允许)/ `exec-block-black`(屏蔽黑)/ `exec-block-black-gray`(屏蔽黑灰)。
+`--exec` 取值:`off`(关闭远程命令)/ `normal`(屏蔽黑,默认)/ `strict`(屏蔽黑灰)/ `all`(全允许)。大小写不敏感。
 
 > `policy` 只由 **server 端**决定(client 无法覆盖)。server 判定拦截后 client 只收到 403,无法通过改 client 配置绕过。
 
@@ -488,7 +489,7 @@ agent(或脚本)通过 `lansyncopt exec` 调用,接口契约如下:
 // server.json(start 时写入;stop 删除)
 {
   "token": "<派生的token>",
-  "policy": "exec-block-black",      // exec-forbidden | exec-all-allow | exec-block-black | exec-block-black-gray
+  "policy": "normal",      // off | all | normal | strict
   "maxConcurrent": 4,
   "commandBlacklist": ["rm -rf /", "shutdown", "reboot"],
   "commandGraylist": ["sudo", "kill", "rm", "git reset --hard"]
@@ -518,7 +519,7 @@ agent(或脚本)通过 `lansyncopt exec` 调用,接口契约如下:
 ## 十一、实现要点清单
 
 1. **鉴权中间件**:统一校验 `Authorization: Bearer <token>`,与 `~/.lansyncopt/server.json` 中的 token 比对,作用于全部 `/api/*`;`/api/auth` 供 client config 验证口令
-2. **分级匹配**:黑名单优先 → 灰名单,按 `policy` 决定是否拦截灰名单;`exec-forbidden` 在门禁层直接 403;命中返回 403
+2. **分级匹配**:黑名单优先 → 灰名单,按 `policy` 决定是否拦截灰名单;`off` 在门禁层直接 403;命中返回 403
 3. **动态自引用检测**:命令与自身 PID / `~/.lansyncopt` / 代码路径比对,命中拒绝并审计
 4. **断连 kill**:`req.on('aborted')` + `res.on('close')` → 进程组 kill(SIGTERM → 2s → SIGKILL)
 5. **并发控制**:`maxConcurrent` 上限,超出返回 429
@@ -531,7 +532,7 @@ agent(或脚本)通过 `lansyncopt exec` 调用,接口契约如下:
 |------|------|
 | `src/server.js` | `/api/exec` + 全量鉴权中间件(所有 `/api/*`)、`/api/auth`、黑/灰名单分级 + policy、断连 kill、并发上限、审计日志 |
 | `src/client.js` | `exec()`、`verifyAuth()`、所有请求携带 token、`describeFetchError` 带错误码的报错 |
-| `src/cli.js` | `exec` 命令;`server start --policy`(必输口令);`client config` = 地址校验 + 口令 + 验证 |
+| `src/cli.js` | `exec` 命令;`server start --exec`(必输口令);`client config` = 地址校验 + 口令 + 验证 |
 | `src/config.js` | token、policy、黑/灰名单、maxConcurrent 读写 |
 | `DESIGN.md` | 更新设计文档 |
 | `README.md` | 更新用法说明 |
@@ -586,7 +587,7 @@ agent(或脚本)通过 `lansyncopt exec` 调用,接口契约如下:
 1. **先 `lansyncopt server stop`**——daemon 持有 `server.log` 句柄,不停的活 `rm -rf ~/.lansyncopt` 会失败,`set -e` 中断装一半;
 2. 同步最新源码到 239 的源码目录(可用 `lansyncopt push --no-delete` 从 client 推);
 3. `sh setup.sh`(需 Git Bash)。副作用:安装目录被删重建 → **token 丢失**,server start 要重跑;
-4. `cd` 到目标同步目录再 `server start --policy <m>`(LANSNC_PASSWORD 或交互输口令;口令与 client 端一致即 token 对齐,client 端无需重配);
+4. `cd` 到目标同步目录再 `server start --exec <m>`(LANSNC_PASSWORD 或交互输口令;口令与 client 端一致即 token 对齐,client 端无需重配);
 5. 验收:`server start` 显示预期 `Version` + client 端跑 `lansyncopt exec "where node"`(外部 exe 输出可达即通道正常)。
 
 **Windows 服务端已知环境行为**(修复后仍建议知晓):cmd 内建命令(`type`/`dir`/`echo`)输出通道最稳,排查远端文件可直接 `lansyncopt exec "type test.txt"`;极端环境(严格 EDR)若外部进程输出仍被吞,兜底方案是 ConPTY(node-pty)用伪终端回收整棵命令树的输出。

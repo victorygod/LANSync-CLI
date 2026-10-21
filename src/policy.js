@@ -5,16 +5,26 @@ import crypto from 'node:crypto';
 const TOKEN_SALT = 'lansync-cli-v1';
 
 // ===== exec 策略 =====
-// 由 server start --policy 选择;exec-forbidden 为默认(文件同步可用,远程命令关闭)。
+// 由 server start --exec 选择;normal 为默认(远程执行开启,拦灾难性黑名单、灰名单放行)。
 export const EXEC_POLICIES = [
-  'exec-forbidden',      // 远程命令整体关闭
-  'exec-all-allow',      // 全允许,黑灰名单都不拦
-  'exec-block-black',    // 拦黑名单,灰名单放行
-  'exec-block-black-gray' // 黑+灰都拦
+  'off',      // 远程命令整体关闭
+  'normal',   // 拦黑名单,灰名单放行(默认)
+  'strict',   // 黑+灰都拦
+  'all'       // 全允许,黑灰名单都不拦
 ];
-export const DEFAULT_POLICY = 'exec-forbidden';
+export const DEFAULT_POLICY = 'normal';
 
-// ===== 默认黑名单(灾难性,除 exec-all-allow 外都拦) =====
+// 归一化 + 校验:trim + 小写后查表。
+// 合法 → 返回归一化的小写短词;非法/非字符串 → 返回 null。
+// CLI 用它校验 --exec 值(非法报错退出 1);server 用它读 server.json
+// (null 兜成 DEFAULT_POLICY),两端共用同一张词表,不存在「CLI 认、server 不认」。
+export function resolvePolicy(value) {
+  if (typeof value !== 'string') return null;
+  const v = value.trim().toLowerCase();
+  return EXEC_POLICIES.includes(v) ? v : null;
+}
+
+// ===== 默认黑名单(灾难性,除 all 外都拦) =====
 export const DEFAULT_BLACKLIST = [
   // Unix / Linux / macOS
   'rm -rf /',
@@ -103,7 +113,7 @@ export const DEFAULT_BLACKLIST = [
   'Stop-Process -Name node'
 ];
 
-// ===== 默认灰名单(高频半安全,仅 block-black-gray 模式拦) =====
+// ===== 默认灰名单(高频半安全,仅 strict 模式拦) =====
 export const DEFAULT_GRAYLIST = [
   // Unix / Linux / macOS
   'sudo',
@@ -186,15 +196,16 @@ export function matchesList(command, list) {
 }
 
 // 分级判定:黑名单优先,再按 policy 决定是否拦灰名单。
-// policy: exec-forbidden | exec-all-allow | exec-block-black | exec-block-black-gray
-// 无旧名兼容:policy 只认这四个值,CLI 侧 start 时校验,配置里出现旧值一律按未识别处理(仅黑名单兜底)。
+// policy: off | normal | strict | all(resolvePolicy 归一后的值)
+// 无旧名兼容:CLI 侧 start 时校验拒绝;server 侧经 resolvePolicy 兜成
+// DEFAULT_POLICY('normal'),与旧「未识别 → 仅黑名单兜底」行为等价(黑拦灰放)。
 export function checkPolicy(command, policy, blacklist = DEFAULT_BLACKLIST, graylist = DEFAULT_GRAYLIST) {
-  // 正常流程下 exec-forbidden 在 server 门禁层就已拒绝;这里兜底:万一漏拦,一律拒绝。
-  if (policy === 'exec-forbidden') {
-    return { blocked: true, list: 'policy', matched: 'exec-forbidden' };
+  // 正常流程下 off 在 server 门禁层就已拒绝;这里兜底:万一漏拦,一律拒绝。
+  if (policy === 'off') {
+    return { blocked: true, list: 'policy', matched: 'off' };
   }
 
-  if (policy === 'exec-all-allow') {
+  if (policy === 'all') {
     return { blocked: false, list: null, matched: null };
   }
 
@@ -203,7 +214,7 @@ export function checkPolicy(command, policy, blacklist = DEFAULT_BLACKLIST, gray
     return { blocked: true, list: 'black', matched: blackHit };
   }
 
-  if (policy === 'exec-block-black-gray') {
+  if (policy === 'strict') {
     const grayHit = matchesList(command, graylist);
     if (grayHit) {
       return { blocked: true, list: 'gray', matched: grayHit };
