@@ -43,9 +43,12 @@ A minimal LAN file sync tool with optional remote command execution.
 ```
 
 This installs lansync to `~/.lansync` and creates a global `lansync` command.
-Running it over an existing install removes the whole directory first —
-including `client.json`/`server.json` — so re-run `client config` after
-reinstalling. `~/.lansyncopt` from the temporary release is left untouched.
+It checks Node.js (>= 18 required) but does **not** install it — if Node is
+missing or too old the script exits with install hints (nvm / Homebrew /
+nodejs.org). Running it over an existing install removes the whole directory
+first — including `client.json`/`server.json` — so re-run `client config`
+after reinstalling. `~/.lansyncopt` from the temporary release is left
+untouched.
 
 ### Manual Install
 
