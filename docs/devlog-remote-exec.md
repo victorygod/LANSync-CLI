@@ -222,3 +222,31 @@ getPortOwnerPid 听本地端口返回自身 pid / 空闲端口返回 null;getPid
 1. **exec 输出 UTF-8**:win32 cmd 内建命令输出跟随 OEM codepage(中文系统 GBK),经管道回传按 UTF-8 解码成乱码(taskkill 的「成功:」变天书)。server 端执行前 `chcp 65001 >nul` 统一切 UTF-8,所有子命令受益。
 2. **测试 daemon 死透等待**:win32 下 daemon 的 cwd 锁着 temp 目录,stop 后立刻 rmSync 必撞 EPERM(强杀后内核关句柄需要一瞬;marauding maxRetries 只能 3s 兜底)。afterEach 改为轮询 daemon pid 直到消失(至多 5s)再删;并定位到今日历次被杀测试遗留的 8 个孤儿 daemon(人工 taskkill 清理)。
 3. **提交身份约定**:远程仓库的提交作者必须是仓库所在机器的 git 身份(Windows: victorygod <htli0719@outlook.com>),git log 中不得出现lanesync另一侧的身份;跨机搬运行内改动后统一以落盘机器身份提交,Mac 侧提交仅作为本机备份。
+
+### 补遗(合并回 main,2026-10-19)
+
+`feature/remote-exec` 已合并回 main(26 个提交,fast-forward),临时名使命结束,整体恢复 `lansync` 命名:
+
+1. **恢复范围**:package.json name/bin(`lansync`)、`src/config.js` 默认配置目录(`~/.lansync`)、`setup.sh`(安装目录与全局命令)、`src/cli.js` 全部文案、README 命令示例与安装说明。
+2. **ignore 列表保留双条目**:client/server 的默认忽略规则同时含 `.lansync` 与 `.lansyncopt`,防 sync root 内残留的临时期目录被同步/误删。
+3. **测试同步**:mkdtemp 前缀改回 `lansync-*`;test-config 默认目录断言改 `endsWith('.lansync')`;自引用检测用例的 config 路径 fixture 同改。历史事故注释(真实 `~/.lansyncopt` 被污染的记叙)保留原貌,不篡改记录。
+4. **升级注意**:配置目录回到 `~/.lansync`,临时期的 `~/.lansyncopt` 状态不迁移——升级后需重跑 `server start` 与 `client config`;setup.sh/npm link 安装的副本不随仓库同步自动更新,合并后各机需重跑安装。
+
+### 补遗(v1.5.0,2026-10-19:exec 参数语义化 + 默认放宽为 normal)
+
+**动机**:`--policy exec-block-black-gray` 这类取值太长(6+21 字符),且 `--policy off` 语义别扭——policy 是名词,off 是它的表语,读作「策略:关」不通。
+
+**改动**:
+
+1. **参数改名 `--policy` → `--exec`**,直接点出管控对象:`--exec off` 读作「执行:关」。
+2. **取值换成语义短词,大小写不敏感**:`off`(禁用)/ `normal`(拦黑,灰放行,**新默认**)/ `strict`(黑+灰都拦)/ `all`(全放行)。取 `normal` 而非 `black`:默认档报「定位」不报「实现」,且避免与 checkPolicy 命中标记 `list:'black'`(403 文案 `Command blocked (black)`)词汇冲突——两个 black 不再指不同的东西。
+3. **默认从 off 放宽为 normal**:server 裸启动即开启远程执行(拦灾难性黑名单)。要全关需显式 `--exec off`。
+4. **旧长名硬切**:CLI 传旧长名报 `Invalid exec mode: <输入>. Valid: off, normal, strict, all`。server.json 不跨重启(stop 即删、start 重写),无旧值残留迁移。
+5. **`resolvePolicy(value)` 集中归一**(trim + 小写 + 查表),CLI 校验与 server 读取共用一词表,修掉旧「CLI 认、server 不认」的不对称。server 侧 `effectivePolicy()`:未识别值兜成 normal(黑拦灰放),与旧未识别兜底行为等价;/api/auth 与 server status 回显的都是**生效值**,不再透传配置原始串。
+6. **内部字段名保留 policy**(server.json 的 `policy` 键、/api/auth 返回的 `data.policy`、checkPolicy 函数名):diff 最小,混版本期间旧 client 仍能读到字段值。
+7. 门禁 403 文案 `Exec is forbidden (policy=...)` → `Exec is disabled (policy=off)`;审计 `reason=exec_forbidden` → `reason=exec_disabled`(**检索历史 server.log 时两个 token 都要查**)。
+8. 顺带加固:口令必填判定从 `!password` 收紧为 `!password || !password.trim()`——`LANSNC_PASSWORD='   '`(纯空格)此前会原样派生 token,现在拒绝;不 trim 值本身,含首尾空格的口令两端口径一致的语义保留。
+
+**测试**:旧值全量映射;新增 resolvePolicy 单测(归一/trim/旧长名 null/默认钉死)、server.json 旧长名兜底为 normal、CLI 非法值 exit 1 精确文案、`--exec STRICT` 大小写归一且落盘归一值、空格口令拒绝;集成套件删掉显式 `--policy`,整 suite 跑在默认 normal 上并断言 `Exec: normal`。136/136 全绿。
+
+**部署注意**:默认行为从「exec 全关」变为「拦黑名单」,升级后各机要重跑安装(setup.sh/npm link 副本不随仓库同步更新)并重启 daemon;依赖旧长名的脚本会 exit 1。

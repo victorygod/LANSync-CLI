@@ -12,7 +12,7 @@ import { writeServerConfig, readClientConfig } from '../src/config.js';
 // ~/.lansyncopt/server.json。daemon 每个请求都重读配置,在跑着 server 的
 // 机器上(Windows)这会让活 server 即刻换 token,client 全线 401。
 // (HOME 覆盖在 Windows 无效:os.homedir() 走 USERPROFILE)
-process.env.LANSNC_CONFIG_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'lansyncopt-test-client-'));
+process.env.LANSNC_CONFIG_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'lansync-test-client-'));
 
 describe('client HTTP functions', () => {
   let tmpDir;
@@ -29,7 +29,7 @@ describe('client HTTP functions', () => {
 
       if (url.pathname === '/api/auth') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ ok: true, policy: 'exec-forbidden' }));
+        res.end(JSON.stringify({ ok: true, policy: 'off' }));
       } else if (url.pathname === '/api/list') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ files: [{ path: 'test.txt', size: 5, mtime: 1000 }] }));
@@ -115,7 +115,7 @@ describe('client HTTP functions', () => {
   describe('verifyAuth', () => {
     it('returns server policy on success', async () => {
       const policy = await verifyAuth(serverUrl, 'test-token');
-      assert.strictEqual(policy, 'exec-forbidden');
+      assert.strictEqual(policy, 'off');
     });
   });
 });
@@ -318,8 +318,8 @@ describe('sync logic', () => {
 
 // 给使用真实 createServer 的用例准备隔离的鉴权配置
 function setupAuthConfig(rootDir) {
-  process.env.LANSNC_CONFIG_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'lansyncopt-client-config-'));
-  writeServerConfig({ pid: process.pid, port: 0, rootDir, ip: '127.0.0.1', token: 'test-token', policy: 'exec-forbidden' });
+  process.env.LANSNC_CONFIG_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'lansync-client-config-'));
+  writeServerConfig({ pid: process.pid, port: 0, rootDir, ip: '127.0.0.1', token: 'test-token', policy: 'off' });
 }
 
 function teardownAuthConfig() {

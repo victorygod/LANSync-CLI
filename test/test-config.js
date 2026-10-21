@@ -10,7 +10,7 @@ import { getConfigDir, readServerConfig, writeServerConfig, readClientConfig, wr
 // 注意 HOME 覆盖不够——os.homedir() 在 Windows 上走 USERPROFILE,
 // 旧写法只在 macOS 隔离生效,Windows 上会把真实 ~/.lansyncopt/server.json
 // 写花(daemon 每请求重读配置 → 活着的 server 即刻换 token → client 全线 401)
-process.env.LANSNC_CONFIG_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'lansyncopt-test-config-'));
+process.env.LANSNC_CONFIG_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'lansync-test-config-'));
 
 describe('config module', () => {
   let originalHome;
@@ -23,7 +23,7 @@ describe('config module', () => {
     // 回落 os.homedir() 写真实 ~/.lansyncopt(Windows 实测事故:test-config
     // :58/72 把活 server 的配置覆盖,daemon 每请求重读配置即刻换 token)。
     // 每个用例都重新钉一遍。
-    process.env.LANSNC_CONFIG_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'lansyncopt-test-config-'));
+    process.env.LANSNC_CONFIG_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'lansync-test-config-'));
   });
 
   afterEach(() => {
@@ -33,13 +33,14 @@ describe('config module', () => {
   });
 
   describe('getConfigDir', () => {
-    it('returns ~/.lansyncopt path (isolated from installed lansync)', () => {
+    it('returns ~/.lansync path', () => {
       // 本文件顶部为防泄漏设了 LANSNC_CONFIG_DIR;该用例专测默认值,临时摘掉
+      // (注意 endsWith 断言避免撞前缀:曾有临时名时期断言 .lansyncopt)
       const savedOverride = process.env.LANSNC_CONFIG_DIR;
       delete process.env.LANSNC_CONFIG_DIR;
       try {
         const configDir = getConfigDir();
-        assert.ok(configDir.endsWith('.lansyncopt'));
+        assert.ok(configDir.endsWith('.lansync'));
       } finally {
         if (savedOverride !== undefined) {
           process.env.LANSNC_CONFIG_DIR = savedOverride;

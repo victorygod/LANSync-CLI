@@ -16,10 +16,10 @@ describe('integration', () => {
   let serverPid;
 
   beforeEach(async () => {
-    configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lansyncopt-config-'));
+    configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lansync-config-'));
 
-    serverDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lansyncopt-server-'));
-    clientDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lansyncopt-client-'));
+    serverDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lansync-server-'));
+    clientDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lansync-client-'));
 
     // 用随机高端口,避免与真实 lansync server(默认 8001)冲突
     const port = 20000 + Math.floor(Math.random() * 20000);
@@ -30,8 +30,10 @@ describe('integration', () => {
     fs.mkdirSync(path.join(serverDir, 'src'));
     fs.writeFileSync(path.join(serverDir, 'src', 'index.js'), 'console.log("hello")');
 
-    // Start server and capture output
-    const output = await runCli(['server', 'start', '--port', String(port), '--policy', 'exec-block-black'], serverDir);
+    // Start server and capture output(故意不传 --exec:整个 suite 跑在新默认 normal 上)
+    const output = await runCli(['server', 'start', '--port', String(port)], serverDir);
+    // 默认档必须钉死:新装即「远程执行开启 + 拦黑名单」
+    assert.ok(output.includes('Exec: normal'), `Default exec policy missing in output: ${output}`);
     // Parse server URL from output
     const match = output.match(/URL: (http:\/\/[^\s]+)/);
     if (match) {
@@ -73,7 +75,7 @@ describe('integration', () => {
     // Configure client (password comes from LANSNC_PASSWORD, verified against server)
     const configResult = await runCli(['client', 'config', serverUrl.replace('http://', '')], clientDir);
     assert.ok(configResult.includes('Connected to'));
-    assert.ok(configResult.includes('exec policy: exec-block-black'));
+    assert.ok(configResult.includes('exec policy: normal'));
 
     // Pull files
     const pullResult = await runCli(['pull', '--no-delete'], clientDir);
@@ -175,12 +177,66 @@ describe('integration', () => {
     assert.strictEqual(result.prefix, '');
   });
 
+  it('server start rejects legacy long --exec values (hard cut, no daemon spawned)', async () => {
+    const { code, stderr } = await runCliCapture(
+      ['server', 'start', '--exec', 'exec-block-black'], serverDir
+    );
+    assert.strictEqual(code, 1);
+    assert.ok(stderr.includes('Invalid exec mode: exec-block-black. Valid: off, normal, strict, all'));
+  });
+
+  it('server start rejects garbage --exec values', async () => {
+    const { code, stderr } = await runCliCapture(['server', 'start', '--exec', 'yes'], serverDir);
+    assert.strictEqual(code, 1);
+    assert.ok(stderr.includes('Invalid exec mode: yes. Valid: off, normal, strict, all'));
+  });
+
+  it('server start normalizes --exec case and persists the normalized mode', async () => {
+    // 第二个 daemon:独立端口 + 独立配置目录,用完恢复(仿 not-configured 用例的交换模式)
+    const originalConfigDir = configDir;
+    const secondConfigDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lansync-config-'));
+    configDir = secondConfigDir;
+    let secondPid;
+    try {
+      const secondPort = 20000 + Math.floor(Math.random() * 20000);
+      const out = await runCli(['server', 'start', '--port', String(secondPort), '--exec', 'STRICT'], serverDir);
+      assert.ok(out.includes('Exec: strict'), `Normalized exec mode missing in output: ${out}`);
+
+      const pidMatch = out.match(/PID: (\d+)/);
+      assert.ok(pidMatch, `PID not found in output: ${out}`);
+      secondPid = parseInt(pidMatch[1], 10);
+
+      // status 从 server.json 读取:归一后的 strict 也落了盘,不是只回显
+      const status = await runCli(['server', 'status'], serverDir);
+      assert.ok(status.includes('Exec: strict'), `Persisted exec mode missing in status: ${status}`);
+    } finally {
+      try { await runCli(['server', 'stop'], serverDir); } catch {}
+      // 等 daemon 死透再删(win32 句柄释放滞后,对齐 afterEach 的轮询惯例)
+      for (let tries = 0; secondPid && tries < 25; tries++) {
+        let alive = false;
+        try { process.kill(secondPid, 0); alive = true; } catch {}
+        if (!alive) break;
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+      fs.rmSync(secondConfigDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
+      configDir = originalConfigDir;
+    }
+  });
+
+  it('server start rejects a blank password from LANSNC_PASSWORD', async () => {
+    const { code, stderr } = await runCliCapture(['server', 'start'], serverDir, {
+      LANSNC_PASSWORD: '   '
+    });
+    assert.strictEqual(code, 1);
+    assert.ok(stderr.includes('Password is required'));
+  });
+
   it('diff exits 2 when client is not configured', async () => {
     // 指向一个全新配置目录,让 client 处于未配置状态。
     // 用完必须恢复:afterEach 的 server stop 依赖 beforeEach 的 configDir
     // (指向本用例 daemon 的配置),改了不还,daemon 就没人杀了(EPERM 现场已取证)
     const originalConfigDir = configDir;
-    configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lansyncopt-config-'));
+    configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lansync-config-'));
     try {
       const { code, stderr } = await runCliCapture(['diff'], clientDir);
 
@@ -192,13 +248,14 @@ describe('integration', () => {
   });
 });
 
-function runCliCapture(args, cwd) {
+function runCliCapture(args, cwd, env = {}) {
   return new Promise((resolve, reject) => {
     const cliPath = path.join(process.cwd(), 'bin', 'lansync.js');
     const proc = spawn('node', [cliPath, ...args], {
       cwd,
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, LANSNC_CONFIG_DIR: configDir, LANSNC_PASSWORD: 'test-password' }
+      // 后传入的 env 键覆盖默认(如哄骗/空白口令用例)
+      env: { ...process.env, LANSNC_CONFIG_DIR: configDir, LANSNC_PASSWORD: 'test-password', ...env }
     });
 
     let stdout = '';

@@ -44,7 +44,7 @@ function describeFetchError(err, serverUrl) {
   const cause = err?.cause || {};
   const code = cause.code || err.code || (err.name === 'AbortError' ? 'ETIMEDOUT' : '') || err.name;
   const hints = {
-    ENOTFOUND: 'host not found - check the address for typos (see lansyncopt client status)',
+    ENOTFOUND: 'host not found - check the address for typos (see lansync client status)',
     ECONNREFUSED: 'connection refused - server not running or wrong port',
     ETIMEDOUT: 'timed out - host unreachable or firewall',
     EHOSTUNREACH: 'host unreachable',
@@ -71,7 +71,7 @@ async function apiFetch(url, { token, ...options } = {}) {
 }
 
 function unauthorizedError() {
-  return new Error('Unauthorized: wrong password. Re-run: lansyncopt client config <ip:port>');
+  return new Error('Unauthorized: wrong password. Re-run: lansync client config <ip:port>');
 }
 
 // Retry helper for network operations

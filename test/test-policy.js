@@ -5,7 +5,9 @@ import {
   deriveToken,
   normalizeCommand,
   checkPolicy,
-  detectSelfReference
+  resolvePolicy,
+  detectSelfReference,
+  DEFAULT_POLICY
 } from '../src/policy.js';
 
 describe('deriveToken', () => {
@@ -28,50 +30,83 @@ describe('normalizeCommand', () => {
   });
 });
 
+describe('resolvePolicy', () => {
+  it('normalizes case', () => {
+    assert.strictEqual(resolvePolicy('OFF'), 'off');
+    assert.strictEqual(resolvePolicy('NORMAL'), 'normal');
+    assert.strictEqual(resolvePolicy('Strict'), 'strict');
+    assert.strictEqual(resolvePolicy('ALL'), 'all');
+  });
+
+  it('trims surrounding whitespace', () => {
+    assert.strictEqual(resolvePolicy(' off '), 'off');
+  });
+
+  it('rejects legacy long names (hard cut)', () => {
+    assert.strictEqual(resolvePolicy('exec-forbidden'), null);
+    assert.strictEqual(resolvePolicy('exec-block-black'), null);
+    assert.strictEqual(resolvePolicy('exec-block-black-gray'), null);
+    assert.strictEqual(resolvePolicy('exec-all-allow'), null);
+  });
+
+  it('rejects garbage and non-string input', () => {
+    assert.strictEqual(resolvePolicy('yes'), null);
+    assert.strictEqual(resolvePolicy(''), null);
+    assert.strictEqual(resolvePolicy(undefined), null);
+    assert.strictEqual(resolvePolicy(null), null);
+  });
+
+  it('default policy is normal', () => {
+    assert.strictEqual(DEFAULT_POLICY, 'normal');
+  });
+});
+
 describe('checkPolicy', () => {
   it('blocks catastrophic root deletion as black', () => {
-    const d = checkPolicy('rm -rf /', 'exec-block-black');
+    const d = checkPolicy('rm -rf /', 'normal');
     assert.strictEqual(d.blocked, true);
     assert.strictEqual(d.list, 'black');
   });
 
-  it('exec-forbidden blocks everything (defense in depth)', () => {
-    assert.strictEqual(checkPolicy('echo hi', 'exec-forbidden').blocked, true);
-    assert.strictEqual(checkPolicy('rm -rf /', 'exec-forbidden').list, 'policy');
+  it('off blocks everything (defense in depth)', () => {
+    assert.strictEqual(checkPolicy('echo hi', 'off').blocked, true);
+    assert.strictEqual(checkPolicy('rm -rf /', 'off').list, 'policy');
   });
 
   it('does NOT block targeted absolute-path rm (word-boundary match)', () => {
-    const d = checkPolicy('rm -rf /home/user/node_modules', 'exec-block-black');
+    const d = checkPolicy('rm -rf /home/user/node_modules', 'normal');
     assert.strictEqual(d.blocked, false);
   });
 
-  it('gray command allowed in exec-block-black, blocked in exec-block-black-gray', () => {
-    assert.strictEqual(checkPolicy('docker system prune', 'exec-block-black').blocked, false);
-    assert.strictEqual(checkPolicy('docker system prune', 'exec-block-black-gray').blocked, true);
+  it('gray command allowed in normal, blocked in strict', () => {
+    assert.strictEqual(checkPolicy('docker system prune', 'normal').blocked, false);
+    assert.strictEqual(checkPolicy('docker system prune', 'strict').blocked, true);
   });
 
-  it('exec-all-allow blocks nothing', () => {
-    assert.strictEqual(checkPolicy('rm -rf /', 'exec-all-allow').blocked, false);
-    assert.strictEqual(checkPolicy('docker system prune', 'exec-all-allow').blocked, false);
+  it('all blocks nothing', () => {
+    assert.strictEqual(checkPolicy('rm -rf /', 'all').blocked, false);
+    assert.strictEqual(checkPolicy('docker system prune', 'all').blocked, false);
   });
 
   it('unrecognized policy value gets no gray pass (strict, no legacy aliases)', () => {
-    // 旧名 'block-black-gray' 不是合法值:不拦灰名单,仅黑名单兜底 —— 明确不兼容旧名
-    assert.strictEqual(checkPolicy('docker system prune', 'block-black-gray').blocked, false);
+    // 旧长名 'exec-block-black' 自 v1.5.0 起非法:checkPolicy 对未识别值仅黑名单兜底
+    // —— 黑名单仍拦,灰名单放行(与 server 侧兜成 normal 的行为等价)
+    assert.strictEqual(checkPolicy('rm -rf /', 'exec-block-black').blocked, true);
+    assert.strictEqual(checkPolicy('docker system prune', 'exec-block-black').blocked, false);
   });
 
   it('blacklist wins over graylist (sudo su vs sudo)', () => {
-    const d = checkPolicy('sudo su', 'exec-block-black-gray');
+    const d = checkPolicy('sudo su', 'strict');
     assert.strictEqual(d.list, 'black');
   });
 
   it('whitelist commands always pass', () => {
-    assert.strictEqual(checkPolicy('git pull', 'exec-block-black').blocked, false);
-    assert.strictEqual(checkPolicy('npm test', 'exec-block-black-gray').blocked, false);
+    assert.strictEqual(checkPolicy('git pull', 'normal').blocked, false);
+    assert.strictEqual(checkPolicy('npm test', 'strict').blocked, false);
   });
 
   it('case-insensitive for Windows commands', () => {
-    const d = checkPolicy('FORMAT C:', 'exec-block-black');
+    const d = checkPolicy('FORMAT C:', 'normal');
     assert.strictEqual(d.blocked, true);
     assert.strictEqual(d.list, 'black');
   });
@@ -83,7 +118,7 @@ describe('detectSelfReference', () => {
   });
 
   it('detects config dir path', () => {
-    assert.strictEqual(detectSelfReference('rm -rf /home/u/.lansyncopt', ['999', '/home/u/.lansyncopt']), '/home/u/.lansyncopt');
+    assert.strictEqual(detectSelfReference('rm -rf /home/u/.lansync', ['999', '/home/u/.lansync']), '/home/u/.lansync');
   });
 
   it('returns null for clean command', () => {

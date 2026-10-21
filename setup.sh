@@ -1,16 +1,15 @@
 #!/bin/bash
 
-# lansyncopt setup script for macOS / Linux
-# Installs lansyncopt to ~/.lansyncopt and creates a global command
-# (isolated from the existing lansync install at ~/.lansync)
+# lansync setup script for macOS / Linux
+# Installs lansync to ~/.lansync and creates a global command
 
 set -e
 
 MIN_NODE_VERSION=18
-INSTALL_DIR="$HOME/.lansyncopt"
+INSTALL_DIR="$HOME/.lansync"
 REPO_URL="https://github.com/wolf4ood/lansync.git"
 
-echo "=== lansyncopt Setup ==="
+echo "=== lansync Setup ==="
 echo ""
 
 # Check Node.js
@@ -45,11 +44,11 @@ if [ -f "$SCRIPT_DIR/package.json" ]; then
     SOURCE_DIR="$SCRIPT_DIR"
 else
     # Clone from GitHub
-    echo "Cloning lansyncopt from GitHub..."
+    echo "Cloning lansync from GitHub..."
     SOURCE_DIR="$INSTALL_DIR"
 fi
 
-# Always install to ~/.lansyncopt for consistency
+# Always install to ~/.lansync for consistency
 if [ -d "$INSTALL_DIR" ]; then
     echo "Removing existing installation..."
     rm -rf "$INSTALL_DIR"
@@ -81,12 +80,12 @@ echo ""
 echo "Installed to: $INSTALL_DIR"
 echo ""
 echo "Usage:"
-echo "  lansyncopt --help"
-echo "  lansyncopt server start"
-echo "  lansyncopt client config <ip:port>"
-echo "  lansyncopt pull"
-echo "  lansyncopt push"
+echo "  lansync --help"
+echo "  lansync server start"
+echo "  lansync client config <ip:port>"
+echo "  lansync pull"
+echo "  lansync push"
 echo ""
 echo "To uninstall:"
 echo "  rm -rf $INSTALL_DIR"
-echo "  npm unlink -g lansyncopt"
+echo "  npm unlink -g lansync"
