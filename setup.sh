@@ -7,7 +7,7 @@ set -e
 
 MIN_NODE_VERSION=18
 INSTALL_DIR="$HOME/.lansync"
-REPO_URL="https://github.com/wolf4ood/lansync.git"
+REPO_URL="https://github.com/victorygod/LANSync-CLI.git"
 
 echo "=== lansync Setup ==="
 echo ""
