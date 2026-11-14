@@ -5,12 +5,11 @@ import os from 'node:os';
 
 export function getConfigDir() {
   // 支持环境变量覆盖(测试隔离 / 灰度发布)。
-  // 默认 ~/.lansync。远程执行功能曾以临时名 lansyncopt(配置目录 ~/.lansyncopt)
-  // 并行发布以避开旧安装;合并回 main 后恢复原名。
+  // Parallel trial installation uses its own client and server configuration.
   if (process.env.LANSNC_CONFIG_DIR) {
     return process.env.LANSNC_CONFIG_DIR;
   }
-  return path.join(os.homedir(), '.lansync');
+  return path.join(os.homedir(), '.lansyncopt');
 }
 
 function ensureConfigDir() {

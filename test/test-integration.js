@@ -71,6 +71,46 @@ describe('integration', () => {
     fs.rmSync(configDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
   });
 
+  it('push processes every shell-expanded filename and skips files outside that selection', async () => {
+    await runCli(['client', 'config', serverUrl], clientDir);
+    for (const name of ['xxx1', 'xxx2', 'other']) fs.writeFileSync(path.join(clientDir, name), name);
+    // argv received after the shell expands xxx*. No wildcard reaches the CLI.
+    const output = await runCli(['push', 'xxx1', 'xxx2'], clientDir);
+    assert.match(output, /2 uploaded, 0 deleted/);
+    for (const name of ['xxx1', 'xxx2']) assert.equal(fs.readFileSync(path.join(serverDir, name), 'utf8'), name);
+    assert.ok(!fs.existsSync(path.join(serverDir, 'other')));
+  });
+
+  it('validates scopes before transfer and preserves unrelated empty directories', async () => {
+    await runCli(['client', 'config', serverUrl], clientDir);
+    for (const name of ['xxx1', 'xxx2']) fs.writeFileSync(path.join(clientDir, name), name);
+    fs.mkdirSync(path.join(clientDir, 'keep.empty'));
+    fs.mkdirSync(path.join(serverDir, 'remote.empty'));
+    const bad = await runCliCapture(['push', 'xxx1', 'typo'], clientDir);
+    assert.equal(bad.code, 1);
+    assert.match(bad.stderr, /typo/);
+    assert.ok(!fs.existsSync(path.join(serverDir, 'xxx1')));
+    await runCli(['push', 'xxx1', 'xxx2', 'xxx*'], clientDir);
+    assert.equal(fs.readFileSync(path.join(serverDir, 'xxx2'), 'utf8'), 'xxx2');
+    const diff = await runCliCapture(['diff', '--json', 'readme.md', 'package.json'], clientDir);
+    assert.equal(diff.code, 1);
+    assert.equal(JSON.parse(diff.stdout).summary.serverOnly, 2);
+    await runCli(['pull', 'readme.md', 'package.json'], clientDir);
+    for (const name of ['readme.md', 'package.json']) {
+      assert.equal(fs.readFileSync(path.join(clientDir, name), 'utf8'), fs.readFileSync(path.join(serverDir, name), 'utf8'));
+    }
+    assert.ok(fs.existsSync(path.join(clientDir, 'keep.empty')));
+    await runCli(['diff', 'remote.empty/', 'keep.empty/'], clientDir);
+    assert.equal((await runCliCapture(['diff', 'missing/'], clientDir)).code, 2);
+    await runCli(['push', '--help'], clientDir);
+    assert.ok(fs.existsSync(path.join(serverDir, 'src/index.js')));
+    assert.equal((await runCliCapture(['pull', '--no-delet'], clientDir)).code, 1);
+    fs.mkdirSync(path.join(clientDir, 'src'));
+    await runCli(['push'], path.join(clientDir, 'src'));
+    assert.ok(fs.statSync(path.join(serverDir, 'src')).isDirectory());
+    assert.ok(!fs.existsSync(path.join(serverDir, 'src/index.js')));
+  });
+
   it('syncs files from server to client', async () => {
     // Configure client (password comes from LANSNC_PASSWORD, verified against server)
     const configResult = await runCli(['client', 'config', serverUrl.replace('http://', '')], clientDir);

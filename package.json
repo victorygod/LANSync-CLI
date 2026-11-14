@@ -1,10 +1,10 @@
 {
-  "name": "lansync",
-  "version": "1.5.0",
+  "name": "lansyncopt",
+  "version": "1.6.0-opt.1",
   "description": "Minimal LAN file sync tool with optional remote command execution",
   "type": "module",
   "bin": {
-    "lansync": "./bin/lansync.js"
+    "lansyncopt": "./bin/lansync.js"
   },
   "scripts": {
     "test": "node --test test/*.js"

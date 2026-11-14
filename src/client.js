@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { pruneEmptyDirs } from './directories.js';
 import { minimatch } from 'minimatch';
 
 const TIMEOUT_MS = 10000;
@@ -137,7 +138,7 @@ export async function fetchFileList(serverUrl, pathPrefix, token) {
   const data = await res.json();
   // exists 标识 pathPrefix 对应目录在 server 上是否存在;旧 server 无该字段,
   // 缺省按存在处理(仅新 server 会显式回 exists:false)
-  return { files: data.files || [], exists: data.exists !== false };
+  return { files: data.files || [], directories: data.directories || [], scopedPrune: data.scopedPrune === true, exists: data.exists !== false };
 }
 
 export async function fetchFile(serverUrl, filePath, token) {
@@ -193,8 +194,8 @@ export async function uploadFile(serverUrl, filePath, content, token) {
   return res.json();
 }
 
-export async function deleteFile(serverUrl, filePath, token) {
-  const url = `${serverUrl}/api/file?path=${encodeURIComponent(filePath)}`;
+export async function deleteFile(serverUrl, filePath, token, scope = '') {
+  const url = `${serverUrl}/api/file?path=${encodeURIComponent(filePath)}&scope=${encodeURIComponent(scope)}`;
   const res = await apiFetch(url, { token, method: 'DELETE' });
 
   if (!res.ok) {
@@ -254,7 +255,8 @@ export function validateWorkDir(currentDir, workDir) {
   const normalizedCurrent = path.resolve(currentDir);
   const normalizedWork = path.resolve(workDir);
 
-  if (!normalizedCurrent.startsWith(normalizedWork)) {
+  const relative = path.relative(normalizedWork, normalizedCurrent);
+  if (relative === '..' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative)) {
     return {
       valid: false,
       error: `Must run inside workDir: ${workDir}`,
@@ -262,17 +264,13 @@ export function validateWorkDir(currentDir, workDir) {
     };
   }
 
-  const pathPrefix = normalizedCurrent === normalizedWork
-    ? ''
-    : path.relative(normalizedWork, normalizedCurrent);
-
   return {
     valid: true,
-    pathPrefix
+    pathPrefix: relative
   };
 }
 
-export function scanLocalFiles(dir, ignoreRules) {
+export function scanLocalFiles(dir, ignoreRules, directories = []) {
   const results = [];
 
   function walk(currentDir) {
@@ -285,11 +283,13 @@ export function scanLocalFiles(dir, ignoreRules) {
 
     for (const entry of entries) {
       const fullPath = path.join(currentDir, entry.name);
-      const relativePath = path.relative(dir, fullPath);
+      if (process.platform !== 'win32' && entry.name.includes('\\')) continue;
+      const relativePath = normalizePath(path.relative(dir, fullPath));
 
       if (shouldIgnore(relativePath, ignoreRules)) continue;
 
       if (entry.isDirectory()) {
+        directories.push(relativePath);
         walk(fullPath);
       } else if (entry.isFile()) {
         try {
@@ -444,7 +444,7 @@ export function computeDiffInventory(localFiles, serverFiles) {
 // 清单级 diff 的一次编排:一次 /api/list + 本地扫描,零协议改动,只读不传输。
 // server 目录不存在不算错误(与 pull 的拒绝语义不同):diff 是只读的事实报告,
 // 此时 server 侧清单为空,本地文件如实报告为 local-only。
-export async function diff({ serverUrl, workDir, currentDir, pattern, token }) {
+export async function diff({ serverUrl, workDir, currentDir, pattern, patterns = pattern == null ? [] : [pattern], token }) {
   const validation = validateWorkDir(currentDir, workDir);
   if (!validation.valid) {
     throw new Error(`${validation.error}\nCurrent directory: ${validation.currentDir}`);
@@ -454,23 +454,17 @@ export async function diff({ serverUrl, workDir, currentDir, pattern, token }) {
   const pathPrefix = normalizePath(validation.pathPrefix);
   const ignoreRules = loadIgnoreRules(workDir);
 
-  // Expand pattern for directory matching
-  const expandedPattern = expandPattern(pattern);
+  const localDirs = [];
 
   const listing = await fetchFileList(serverUrl, pathPrefix, token);
   let serverFiles = mapServerFiles(listing.files, pathPrefix);
 
-  if (expandedPattern) {
-    serverFiles = serverFiles.filter(f => minimatch(f.path, expandedPattern, { dot: true }));
-  }
-
-  let localFiles = scanLocalFiles(currentDir, ignoreRules);
+  let localFiles = scanLocalFiles(currentDir, ignoreRules, localDirs);
   // win32 上扫描结果是反斜杠路径:统一为 `/`,与 server 侧一致
   localFiles = localFiles.map(f => ({ ...f, path: normalizePath(f.path) }));
 
-  if (expandedPattern) {
-    localFiles = localFiles.filter(f => minimatch(f.path, expandedPattern, { dot: true }));
-  }
+  const serverDirs = listing.directories.map(p => pathPrefix ? p.slice(pathPrefix.length + 1) : p);
+  ({ localFiles, serverFiles } = selectScope(localFiles, serverFiles, localDirs, serverDirs, patterns, 'diff'));
 
   const inventory = computeDiffInventory(localFiles, serverFiles);
 
@@ -542,43 +536,35 @@ function loadIgnoreRules(workDir) {
   return rules;
 }
 
-// Expand pattern to support directory matching
-// - 'dir' or 'dir/' -> '{dir,dir/**}' (match dir itself and all files inside)
-// - 'file.txt' -> 'file.txt' (exact file match)
-// - '**/pattern' -> stays as is
-function expandPattern(pattern) {
-  if (!pattern) return pattern;
-
-  // If pattern already has glob wildcards, use as-is
-  if (pattern.includes('*') || pattern.includes('?')) {
-    return pattern;
+// Resolve each operand against the source inventory before planning any writes.
+function selectScope(localFiles, serverFiles, localDirs, serverDirs, operands, direction) {
+  if (!operands.length) return { localFiles, serverFiles };
+  const source = direction === 'push' ? localFiles : direction === 'pull' ? serverFiles : [...localFiles, ...serverFiles];
+  const directories = new Set(direction === 'push' ? localDirs : direction === 'pull' ? serverDirs : [...localDirs, ...serverDirs]);
+  const names = new Set(source.map(f => f.path));
+  // Older servers list files only. Their nonempty directories are still identifiable.
+  for (const name of names) {
+    let parent = path.posix.dirname(name);
+    while (parent !== '.' && parent !== '/' && !directories.has(parent)) {
+      directories.add(parent);
+      parent = path.posix.dirname(parent);
+    }
   }
-
-  // If pattern ends with /, it's explicitly a directory
-  if (pattern.endsWith('/')) {
-    return pattern + '**';
-  }
-
-  // Check if it looks like a file (has extension or is a dotfile)
-  const lastPart = pattern.split('/').pop();
-
-  // Dotfiles like .gitignore, .env are files
-  if (lastPart.startsWith('.')) {
-    return pattern;
-  }
-
-  // Has extension if there's a dot followed by letters/numbers at the end
-  if (/\.[a-zA-Z0-9]+$/.test(lastPart)) {
-    return pattern;
-  }
-
-  // No extension - could be a file or directory
-  // Match both the file itself and all files inside the directory
-  return `{${pattern},${pattern}/**}`;
+  const matches = operands.map(raw => {
+    const name = path.posix.normalize(process.platform === 'win32' ? normalizePath(raw) : raw).replace(/\/$/, '');
+    if (!raw || path.isAbsolute(raw) || name === '..' || name.startsWith('../')) throw new Error(`Invalid path: ${raw}`);
+    if (name === '.') return () => true;
+    if (directories.has(name)) return p => p === name || p.startsWith(name + '/');
+    if (names.has(name) && !raw.endsWith('/')) return p => p === name;
+    const pattern = raw.endsWith('/') ? name + '/**' : name;
+    const match = p => minimatch(p, pattern, { dot: true, nonegate: true, nocomment: true });
+    if (!source.some(f => match(f.path))) throw new Error(`No matching path: ${raw}`);
+    return match;
+  });
+  const selected = f => matches.some(match => match(f.path));
+  return { localFiles: localFiles.filter(selected), serverFiles: serverFiles.filter(selected) };
 }
 
-// server 列表 → client 视角:统一正斜杠、剥离 pathPrefix。
-// server 路径相对 rootDir,client 需要相对 currentDir 的路径;
 // path/serverPath 共用同一份归一化字符串,落盘、请求、过滤不再各走各的
 function mapServerFiles(serverFiles, pathPrefix) {
   return serverFiles.map(f => {
@@ -591,7 +577,7 @@ function mapServerFiles(serverFiles, pathPrefix) {
   });
 }
 
-export async function pull({ serverUrl, workDir, currentDir, pattern, noDelete, token }) {
+export async function pull({ serverUrl, workDir, currentDir, pattern, patterns = pattern == null ? [] : [pattern], noDelete, token }) {
   const validation = validateWorkDir(currentDir, workDir);
   if (!validation.valid) {
     throw new Error(`${validation.error}\nCurrent directory: ${validation.currentDir}`);
@@ -601,8 +587,7 @@ export async function pull({ serverUrl, workDir, currentDir, pattern, noDelete, 
   const pathPrefix = normalizePath(validation.pathPrefix);
   const ignoreRules = loadIgnoreRules(workDir);
 
-  // Expand pattern for directory matching
-  const expandedPattern = expandPattern(pattern);
+  const localDirs = [];
 
   // Fetch server file list (paths are relative to rootDir)
   const listing = await fetchFileList(serverUrl, pathPrefix, token);
@@ -614,21 +599,14 @@ export async function pull({ serverUrl, workDir, currentDir, pattern, noDelete, 
   }
   let serverFiles = mapServerFiles(listing.files, pathPrefix);
 
-  // Filter by pattern if provided
-  if (expandedPattern) {
-    serverFiles = serverFiles.filter(f => minimatch(f.path, expandedPattern, { dot: true }));
-  }
-
   // Scan local files (paths are relative to currentDir)
-  let localFiles = scanLocalFiles(currentDir, ignoreRules);
+  let localFiles = scanLocalFiles(currentDir, ignoreRules, localDirs);
 
-  // Filter local files by the same pattern to prevent deleting files outside pattern
-  if (expandedPattern) {
-    localFiles = localFiles.filter(f => minimatch(f.path, expandedPattern, { dot: true }));
-  }
+  const serverDirs = listing.directories.map(p => pathPrefix ? p.slice(pathPrefix.length + 1) : p);
+  ({ localFiles, serverFiles } = selectScope(localFiles, serverFiles, localDirs, serverDirs, patterns, 'pull'));
 
   // When pattern is specified, never delete files outside the pattern scope
-  const effectiveNoDelete = noDelete || !!expandedPattern;
+  const effectiveNoDelete = noDelete || patterns.length > 0;
 
   // Compute plan
   const plan = computePullPlan(serverFiles, localFiles, effectiveNoDelete);
@@ -659,13 +637,11 @@ export async function pull({ serverUrl, workDir, currentDir, pattern, noDelete, 
     try {
       fs.unlinkSync(localPath);
       deleted.push(file.path);
-    } catch {
-      // Ignore errors
+      pruneEmptyDirs(localPath, currentDir);
+    } catch (err) {
+      failed.push({ path: file.path, error: err.message });
     }
   }
-
-  // Clean empty directories
-  cleanEmptyDirs(currentDir);
 
   return {
     downloaded,
@@ -676,7 +652,7 @@ export async function pull({ serverUrl, workDir, currentDir, pattern, noDelete, 
   };
 }
 
-export async function push({ serverUrl, workDir, currentDir, pattern, noDelete, token }) {
+export async function push({ serverUrl, workDir, currentDir, pattern, patterns = pattern == null ? [] : [pattern], noDelete, token }) {
   const validation = validateWorkDir(currentDir, workDir);
   if (!validation.valid) {
     throw new Error(`${validation.error}\nCurrent directory: ${validation.currentDir}`);
@@ -686,11 +662,10 @@ export async function push({ serverUrl, workDir, currentDir, pattern, noDelete, 
   const pathPrefix = normalizePath(validation.pathPrefix);
   const ignoreRules = loadIgnoreRules(workDir);
 
-  // Expand pattern for directory matching
-  const expandedPattern = expandPattern(pattern);
+  const localDirs = [];
 
   // Scan local files (paths are relative to currentDir)
-  let localFiles = scanLocalFiles(currentDir, ignoreRules);
+  let localFiles = scanLocalFiles(currentDir, ignoreRules, localDirs);
 
   // win32 上扫描结果是反斜杠路径:统一为 `/`,pattern 过滤、本地读取、
   // 展示在所有平台行为一致;serverPath 相对 rootDir
@@ -700,27 +675,24 @@ export async function push({ serverUrl, workDir, currentDir, pattern, noDelete, 
     serverPath: normalizePath(pathPrefix ? `${pathPrefix}/${f.path}` : f.path)
   }));
 
-  // Filter by pattern if provided
-  if (expandedPattern) {
-    localFiles = localFiles.filter(f => minimatch(f.path, expandedPattern, { dot: true }));
-  }
-
   // Fetch server file list (paths are relative to rootDir)
   // push 对"目录不存在"直接按空列表处理:首次向新子目录 push 属正常场景,
   // 空列表意味着全部上传、无需剔除
   const listing = await fetchFileList(serverUrl, pathPrefix, token);
   let serverFiles = mapServerFiles(listing.files, pathPrefix);
 
-  // Filter server files by the same pattern to prevent deleting files outside pattern
-  if (expandedPattern) {
-    serverFiles = serverFiles.filter(f => minimatch(f.path, expandedPattern, { dot: true }));
-  }
+  const serverDirs = listing.directories.map(p => pathPrefix ? p.slice(pathPrefix.length + 1) : p);
+  ({ localFiles, serverFiles } = selectScope(localFiles, serverFiles, localDirs, serverDirs, patterns, 'push'));
 
   // When pattern is specified, never delete files outside the pattern scope
-  const effectiveNoDelete = noDelete || !!expandedPattern;
+  const effectiveNoDelete = noDelete || patterns.length > 0;
 
   // Compute plan
   const plan = computePushPlan(localFiles, serverFiles, effectiveNoDelete);
+
+  if (pathPrefix && plan.toDelete.length && !listing.scopedPrune) {
+    throw new Error('Update the server before deleting files in a subdirectory, or use --no-delete.');
+  }
 
   // Execute uploads with retry and error collection
   const uploaded = [];
@@ -740,7 +712,7 @@ export async function push({ serverUrl, workDir, currentDir, pattern, noDelete, 
   const deleted = [];
   for (const file of plan.toDelete) {
     try {
-      await withRetry(() => deleteFile(serverUrl, file.serverPath, token));
+      await withRetry(() => deleteFile(serverUrl, file.serverPath, token, pathPrefix));
       deleted.push(file.path);
     } catch (err) {
       failed.push({ path: file.path, error: err.message });
@@ -754,26 +726,4 @@ export async function push({ serverUrl, workDir, currentDir, pattern, noDelete, 
     keptCount: plan.keptCount,
     failed
   };
-}
-
-function cleanEmptyDirs(dir) {
-  let entries;
-  try {
-    entries = fs.readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return;
-  }
-
-  for (const entry of entries) {
-    if (entry.isDirectory()) {
-      const subDir = path.join(dir, entry.name);
-      cleanEmptyDirs(subDir);
-
-      // Check if directory is now empty
-      const subEntries = fs.readdirSync(subDir);
-      if (subEntries.length === 0) {
-        fs.rmdirSync(subDir);
-      }
-    }
-  }
 }

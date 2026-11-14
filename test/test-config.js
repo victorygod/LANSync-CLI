@@ -33,14 +33,14 @@ describe('config module', () => {
   });
 
   describe('getConfigDir', () => {
-    it('returns ~/.lansync path', () => {
+    it('returns ~/.lansyncopt path', () => {
       // 本文件顶部为防泄漏设了 LANSNC_CONFIG_DIR;该用例专测默认值,临时摘掉
       // (注意 endsWith 断言避免撞前缀:曾有临时名时期断言 .lansyncopt)
       const savedOverride = process.env.LANSNC_CONFIG_DIR;
       delete process.env.LANSNC_CONFIG_DIR;
       try {
         const configDir = getConfigDir();
-        assert.ok(configDir.endsWith('.lansync'));
+        assert.ok(configDir.endsWith('.lansyncopt'));
       } finally {
         if (savedOverride !== undefined) {
           process.env.LANSNC_CONFIG_DIR = savedOverride;

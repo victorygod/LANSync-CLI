@@ -1,5 +1,6 @@
 // src/server.js
 import os from 'node:os';
+import { pruneEmptyDirs } from './directories.js';
 import path from 'node:path';
 import fs from 'node:fs';
 import http from 'node:http';
@@ -11,7 +12,7 @@ import { minimatch } from 'minimatch';
 import { readServerConfig, writeServerConfig, getConfigDir } from './config.js';
 import { checkPolicy, detectSelfReference, resolvePolicy, DEFAULT_POLICY, DEFAULT_BLACKLIST, DEFAULT_GRAYLIST } from './policy.js';
 
-export const DEFAULT_PORT = 8001;
+export const DEFAULT_PORT = 8002;
 
 // server.json 里的 policy 归一化:未识别值(旧 exec-* 长名 / 手改 / 大小写变体)
 // 兜成 DEFAULT_POLICY('normal'),与旧「未识别 → 仅黑名单兜底」行为等价(黑拦灰放)。
@@ -143,29 +144,7 @@ export function sanitizePath(requestedPath, rootDir) {
   return absolutePath;
 }
 
-// Git 式空目录修剪:push 删掉某目录下最后一个文件后,从其父目录向上逐级
-// 尝试 rmdir,到 rootDir 为止。只在删除成功后调用(文件已不在)。
-// 只删「确认空」的目录,不用 rmSync recursive——目录里还有 ignore 文件
-// (.DS_Store 等)或被 Windows 占用(EBUSY/EPERM,如资源管理器开着该目录)
-// 时 rmdir 失败即停,留待下次 push 再试,与 git 遇到 ignored 文件时的行为一致。
-export function pruneEmptyDirs(deletedFilePath, rootDir) {
-  const root = path.normalize(rootDir);
-  let current = path.dirname(deletedFilePath);
-
-  while (true) {
-    const rel = path.relative(root, current);
-    // rel='' 表示已到 rootDir 本身——root 是 server 的同步根,永不修剪
-    // 用 `..` + sep 判断越界,避免误伤 '..foo' 这类合法名字(用意同 sanitizePath)
-    if (rel === '' || rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) break;
-
-    try {
-      fs.rmdirSync(current);
-    } catch {
-      break; // 非空或被占用:停在这里
-    }
-    current = path.dirname(current);
-  }
-}
+export { pruneEmptyDirs } from './directories.js';
 
 export function getLocalIP() {
   const interfaces = os.networkInterfaces();
@@ -187,7 +166,7 @@ export function getLocalIP() {
   return fallbackIPs[0] || '127.0.0.1';
 }
 
-export function walkDir(dir, baseDir, ignoreRules) {
+export function walkDir(dir, baseDir, ignoreRules, directories = []) {
   const results = [];
 
   function walk(currentDir) {
@@ -205,6 +184,7 @@ export function walkDir(dir, baseDir, ignoreRules) {
       if (shouldIgnore(relativePath, ignoreRules)) continue;
 
       if (entry.isDirectory()) {
+        directories.push(normalizePath(relativePath));
         walk(fullPath);
       } else if (entry.isFile()) {
         try {
@@ -447,7 +427,7 @@ async function handleList(url, rootDir, res) {
     return;
   }
 
-  if (!fs.existsSync(targetDir)) {
+  if (!fs.statSync(targetDir, { throwIfNoEntry: false })?.isDirectory()) {
     // 区分"目录不存在"与"目录为空":client 若把 files:[] 当"server 全空",
     // pull 会把本地文件全部判为 toDelete。exists:false 让 client 直接拒绝。
     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -456,10 +436,11 @@ async function handleList(url, rootDir, res) {
   }
 
   const ignoreRules = readGitignore(rootDir);
-  const files = walkDir(targetDir, rootDir, ignoreRules);
+  const directories = [];
+  const files = walkDir(targetDir, rootDir, ignoreRules, directories);
 
   res.writeHead(200, { 'Content-Type': 'application/json' });
-  res.end(JSON.stringify({ files, exists: true }));
+  res.end(JSON.stringify({ files, directories, exists: true, scopedPrune: true }));
 }
 
 async function handleFileGet(url, rootDir, res) {
@@ -542,11 +523,18 @@ async function handleFileDelete(url, rootDir, res) {
     return;
   }
 
+  const scope = url.searchParams.get('scope') || '';
+  const boundary = sanitizePath(scope, rootDir);
+  if (!boundary || !absolutePath.startsWith(boundary.endsWith(path.sep) ? boundary : boundary + path.sep)) {
+    res.writeHead(400);
+    res.end(JSON.stringify({ error: 'Invalid deletion scope' }));
+    return;
+  }
   fs.unlinkSync(absolutePath);
 
   // 删除成功后向上修剪空目录:本地删掉整个目录再 push 时,server 端不再
   // 残留空目录壳(协议只列文件,这些空壳对后续 push 永远不可见,会一直积累)
-  pruneEmptyDirs(absolutePath, rootDir);
+  pruneEmptyDirs(absolutePath, boundary);
 
   res.writeHead(200, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify({ success: true }));
@@ -654,9 +642,7 @@ export async function startServerDaemon(rootDir, port = DEFAULT_PORT, token, pol
     // 只拒绝、不杀:占用者可能是旧 lansync server 或其他应用,不能自动 kill。
     // 给出明确出路:换端口,或用对应命令停掉占用者。
     throw new Error(
-      `Port ${port} is in use. Either start on another port (lansync server start --port <n>), ` +
-      `or stop the process holding it (lansync server stop for a leftover daemon; ` +
-      `lansync server stop if the old lansync server is running)`
+      `Port ${port} is in use. Choose another port with lansyncopt server start --port <n>.`
     );
   }
 
@@ -710,12 +696,23 @@ export async function startServerDaemon(rootDir, port = DEFAULT_PORT, token, pol
   return { pid: child.pid, port, ip: config.ip, rootDir };
 }
 
+export function isOwnDaemon(pid) {
+  if (!Number.isSafeInteger(pid) || pid <= 0) return false;
+  const result = process.platform === 'win32'
+    ? spawnSync('powershell.exe', ['-NoProfile', '-Command',
+      `(Get-CimInstance Win32_Process -Filter "ProcessId=${pid}").CommandLine`], { encoding: 'utf8', windowsHide: true })
+    : spawnSync('ps', ['-ww', '-p', String(pid), '-o', 'args='], { encoding: 'utf8' });
+  const cmd = (result.stdout || '').trim().replaceAll('"', '');
+  return result.status === 0 && cmd.startsWith(process.execPath + ' ' + fileURLToPath(import.meta.url) + ' --daemon ');
+}
+
 export function stopServerDaemon() {
   const config = readServerConfig();
   if (!config || !config.pid) {
     return false;
   }
 
+  if (pidAlive(config.pid) && !isOwnDaemon(config.pid)) throw new Error('Saved PID belongs to a different process.');
   try {
     process.kill(config.pid, 'SIGTERM');
   } catch {
