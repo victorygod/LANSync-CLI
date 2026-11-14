@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { pruneEmptyDirs } from './directories.js';
+import { pruneEmptyDirs, resolveSyncPath } from './directories.js';
 import { minimatch } from 'minimatch';
 
 const TIMEOUT_MS = 10000;
@@ -132,13 +132,15 @@ export async function fetchFileList(serverUrl, pathPrefix, token) {
     if (res.status === 401) {
       throw unauthorizedError();
     }
-    throw new Error(`Failed to fetch file list: ${res.status}`);
+    const detail = await res.json().catch(() => null);
+    throw new Error(`Failed to fetch file list: ${res.status}${detail?.error ? `: ${detail.error}` : ''}`);
   }
 
   const data = await res.json();
   // exists 标识 pathPrefix 对应目录在 server 上是否存在;旧 server 无该字段,
   // 缺省按存在处理(仅新 server 会显式回 exists:false)
-  return { files: data.files || [], directories: data.directories || [], scopedPrune: data.scopedPrune === true, exists: data.exists !== false };
+  if (!Array.isArray(data?.files)) throw new Error('Invalid server file list: expected a files array');
+  return { files: data.files, directories: data.directories || [], scopedPrune: data.scopedPrune === true, exists: data.exists !== false };
 }
 
 export async function fetchFile(serverUrl, filePath, token) {
@@ -256,7 +258,7 @@ export function validateWorkDir(currentDir, workDir) {
   const normalizedWork = path.resolve(workDir);
 
   const relative = path.relative(normalizedWork, normalizedCurrent);
-  if (relative === '..' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative)) {
+  if (relative === '..' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative) || !resolveSyncPath(workDir, relative)) {
     return {
       valid: false,
       error: `Must run inside workDir: ${workDir}`,
@@ -270,41 +272,32 @@ export function validateWorkDir(currentDir, workDir) {
   };
 }
 
-export function scanLocalFiles(dir, ignoreRules, directories = []) {
+export function scanLocalFiles(dir, ignoreRules, directories = [], workDir = dir) {
   const results = [];
 
   function walk(currentDir) {
-    let entries;
-    try {
-      entries = fs.readdirSync(currentDir, { withFileTypes: true });
-    } catch {
-      return;
-    }
+    const entries = fs.readdirSync(currentDir, { withFileTypes: true });
 
     for (const entry of entries) {
       const fullPath = path.join(currentDir, entry.name);
       if (process.platform !== 'win32' && entry.name.includes('\\')) continue;
       const relativePath = normalizePath(path.relative(dir, fullPath));
 
-      if (shouldIgnore(relativePath, ignoreRules)) continue;
+      if (shouldIgnore(normalizePath(path.relative(workDir, fullPath)), ignoreRules)) continue;
 
       if (entry.isDirectory()) {
         directories.push(relativePath);
         walk(fullPath);
       } else if (entry.isFile()) {
-        try {
-          const stat = fs.statSync(fullPath);
-          const content = fs.readFileSync(fullPath);
-          const hash = crypto.createHash('md5').update(content).digest('hex');
-          results.push({
-            path: relativePath,
-            size: stat.size,
-            mtime: stat.mtimeMs,
-            hash
-          });
-        } catch {
-          // Skip files we can't stat
-        }
+        const stat = fs.statSync(fullPath);
+        const content = fs.readFileSync(fullPath);
+        const hash = crypto.createHash('md5').update(content).digest('hex');
+        results.push({
+          path: relativePath,
+          size: stat.size,
+          mtime: stat.mtimeMs,
+          hash
+        });
       }
     }
   }
@@ -366,9 +359,6 @@ export function computePullPlan(serverFiles, localFiles, noDelete) {
     if (!localFile) {
       // File doesn't exist locally
       toDownload.push(serverFile);
-    } else if (localFile.mtime === serverFile.mtime && localFile.size === serverFile.size) {
-      // mtime and size match exactly - skip (fast path)
-      toSkip.push(serverFile);
     } else if (localFile.hash === serverFile.hash) {
       // Content identical - skip (hash verification)
       toSkip.push(serverFile);
@@ -393,9 +383,6 @@ export function computePullPlan(serverFiles, localFiles, noDelete) {
 }
 
 // 清单级 diff:只陈述「两边内容是否一致」,不偏向 push/pull 任何一方。
-// 判定只用 hash,不复用 push/pull 的 mtime+size 快路径——diff 是给「确认是否
-// 同步」用的事实报告,若走快路径会出现「diff 说 modified、push 却说 skip」
-// 的自相矛盾。status 三态:modified / local-only / server-only;
 // 两边一致的文件不进 files,只计入 summary.inSync。
 function diffMeta(f) {
   return { size: f.size, mtime: f.mtime, hash: f.hash };
@@ -459,7 +446,7 @@ export async function diff({ serverUrl, workDir, currentDir, pattern, patterns =
   const listing = await fetchFileList(serverUrl, pathPrefix, token);
   let serverFiles = mapServerFiles(listing.files, pathPrefix);
 
-  let localFiles = scanLocalFiles(currentDir, ignoreRules, localDirs);
+  let localFiles = scanLocalFiles(currentDir, ignoreRules, localDirs, workDir);
   // win32 上扫描结果是反斜杠路径:统一为 `/`,与 server 侧一致
   localFiles = localFiles.map(f => ({ ...f, path: normalizePath(f.path) }));
 
@@ -492,9 +479,6 @@ export function computePushPlan(localFiles, serverFiles, noDelete) {
     if (!serverFile) {
       // File doesn't exist on server
       toUpload.push(localFile);
-    } else if (serverFile.mtime === localFile.mtime && serverFile.size === localFile.size) {
-      // mtime and size match exactly - skip (fast path)
-      toSkip.push(localFile);
     } else if (serverFile.hash === localFile.hash) {
       // Content identical - skip (hash verification)
       toSkip.push(localFile);
@@ -520,9 +504,15 @@ export function computePushPlan(localFiles, serverFiles, noDelete) {
 
 const DEFAULT_IGNORE_RULES = ['.git', '.lansync', '.lansyncopt', 'node_modules', '.DS_Store', 'Thumbs.db'];
 
+function checkedLocalPath(root, name) {
+  const resolved = resolveSyncPath(root, name);
+  if (!resolved) throw new Error(`Invalid local path: ${name}`);
+  return resolved;
+}
+
 function loadIgnoreRules(workDir) {
   const rules = [...DEFAULT_IGNORE_RULES];
-  const gitignorePath = path.join(workDir, '.gitignore');
+  const gitignorePath = checkedLocalPath(workDir, '.gitignore');
 
   if (fs.existsSync(gitignorePath)) {
     const content = fs.readFileSync(gitignorePath, 'utf-8');
@@ -600,7 +590,7 @@ export async function pull({ serverUrl, workDir, currentDir, pattern, patterns =
   let serverFiles = mapServerFiles(listing.files, pathPrefix);
 
   // Scan local files (paths are relative to currentDir)
-  let localFiles = scanLocalFiles(currentDir, ignoreRules, localDirs);
+  let localFiles = scanLocalFiles(currentDir, ignoreRules, localDirs, workDir);
 
   const serverDirs = listing.directories.map(p => pathPrefix ? p.slice(pathPrefix.length + 1) : p);
   ({ localFiles, serverFiles } = selectScope(localFiles, serverFiles, localDirs, serverDirs, patterns, 'pull'));
@@ -618,13 +608,12 @@ export async function pull({ serverUrl, workDir, currentDir, pattern, patterns =
     try {
       // Use serverPath for fetching (relative to rootDir)
       const content = await withRetry(() => fetchFile(serverUrl, file.serverPath || file.path, token));
-      if (content) {
-        // Use path for local saving (relative to currentDir)
-        const localPath = path.join(currentDir, file.path);
-        fs.mkdirSync(path.dirname(localPath), { recursive: true });
-        fs.writeFileSync(localPath, Buffer.from(content));
-        downloaded.push(file.path);
-      }
+      if (content === null) throw new Error('File disappeared from server during download');
+      // Use path for local saving (relative to currentDir)
+      const localPath = checkedLocalPath(currentDir, file.path);
+      fs.mkdirSync(path.dirname(localPath), { recursive: true });
+      fs.writeFileSync(localPath, Buffer.from(content));
+      downloaded.push(file.path);
     } catch (err) {
       failed.push({ path: file.path, error: err.message });
     }
@@ -632,12 +621,13 @@ export async function pull({ serverUrl, workDir, currentDir, pattern, patterns =
 
   // Execute deletes
   const deleted = [];
-  for (const file of plan.toDelete) {
-    const localPath = path.join(currentDir, file.path);
+  const skippedDeletes = failed.length ? plan.toDelete.length : 0;
+  for (const file of skippedDeletes ? [] : plan.toDelete) {
     try {
+      const localPath = checkedLocalPath(currentDir, file.path);
       fs.unlinkSync(localPath);
       deleted.push(file.path);
-      pruneEmptyDirs(localPath, currentDir);
+      pruneEmptyDirs(localPath, fs.realpathSync(currentDir));
     } catch (err) {
       failed.push({ path: file.path, error: err.message });
     }
@@ -647,6 +637,7 @@ export async function pull({ serverUrl, workDir, currentDir, pattern, patterns =
     downloaded,
     skipped: plan.toSkip.map(f => f.path),
     deleted,
+    skippedDeletes,
     keptCount: plan.keptCount,
     failed
   };
@@ -665,7 +656,7 @@ export async function push({ serverUrl, workDir, currentDir, pattern, patterns =
   const localDirs = [];
 
   // Scan local files (paths are relative to currentDir)
-  let localFiles = scanLocalFiles(currentDir, ignoreRules, localDirs);
+  let localFiles = scanLocalFiles(currentDir, ignoreRules, localDirs, workDir);
 
   // win32 上扫描结果是反斜杠路径:统一为 `/`,pattern 过滤、本地读取、
   // 展示在所有平台行为一致;serverPath 相对 rootDir
@@ -699,7 +690,7 @@ export async function push({ serverUrl, workDir, currentDir, pattern, patterns =
   const failed = [];
   for (const file of plan.toUpload) {
     try {
-      const localPath = path.join(currentDir, file.path);
+      const localPath = checkedLocalPath(currentDir, file.path);
       const content = fs.readFileSync(localPath);
       await withRetry(() => uploadFile(serverUrl, file.serverPath, content, token));
       uploaded.push(file.path);
@@ -710,7 +701,8 @@ export async function push({ serverUrl, workDir, currentDir, pattern, patterns =
 
   // Execute deletes
   const deleted = [];
-  for (const file of plan.toDelete) {
+  const skippedDeletes = failed.length ? plan.toDelete.length : 0;
+  for (const file of skippedDeletes ? [] : plan.toDelete) {
     try {
       await withRetry(() => deleteFile(serverUrl, file.serverPath, token, pathPrefix));
       deleted.push(file.path);
@@ -723,6 +715,7 @@ export async function push({ serverUrl, workDir, currentDir, pattern, patterns =
     uploaded,
     skipped: plan.toSkip.map(f => f.path),
     deleted,
+    skippedDeletes,
     keptCount: plan.keptCount,
     failed
   };

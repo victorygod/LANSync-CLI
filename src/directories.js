@@ -1,6 +1,33 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+function within(root, target) {
+  const rel = path.relative(root, target);
+  return rel !== '..' && !rel.startsWith('..' + path.sep) && !path.isAbsolute(rel);
+}
+
+// Resolve existing links before accessing a file, including the parents of a new file.
+export function resolveSyncPath(root, name) {
+  if (name.includes('\0') || path.isAbsolute(name)) return null;
+  const target = path.resolve(root, name);
+  if (!within(root, target)) return null;
+  const realRoot = fs.realpathSync(root);
+  let current = realRoot;
+  for (const part of path.relative(root, target).split(path.sep).filter(Boolean)) {
+    current = path.join(current, part);
+    if (fs.lstatSync(current, { throwIfNoEntry: false })?.isSymbolicLink()) {
+      try {
+        current = fs.realpathSync(current);
+      } catch (err) {
+        if (err.code === 'ENOENT' || err.code === 'ELOOP') return null;
+        throw err;
+      }
+      if (!within(realRoot, current)) return null;
+    }
+  }
+  return current;
+}
+
 // Git 式空目录修剪:push 删掉某目录下最后一个文件后,从其父目录向上逐级
 // 尝试 rmdir,到 rootDir 为止。只在删除成功后调用(文件已不在)。
 // 只删「确认空」的目录,不用 rmSync recursive——目录里还有 ignore 文件

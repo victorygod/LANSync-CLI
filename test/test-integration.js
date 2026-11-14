@@ -111,6 +111,56 @@ describe('integration', () => {
     assert.ok(!fs.existsSync(path.join(serverDir, 'src/index.js')));
   });
 
+  it('round-trips literal percent paths and preserves ignored files during a subdirectory mirror', async () => {
+    await runCli(['client', 'config', serverUrl], clientDir);
+    const name = 'report%2Ffinal.txt';
+    fs.writeFileSync(path.join(clientDir, name), 'literal');
+    await runCli(['push', name], clientDir);
+    assert.equal(fs.readFileSync(path.join(serverDir, name), 'utf8'), 'literal');
+    assert.ok(!fs.existsSync(path.join(serverDir, 'report/final.txt')));
+    fs.unlinkSync(path.join(clientDir, name));
+    await runCli(['pull', name], clientDir);
+    assert.equal(fs.readFileSync(path.join(clientDir, name), 'utf8'), 'literal');
+    for (const root of [clientDir, serverDir]) {
+      fs.writeFileSync(path.join(root, '.gitignore'), 'src/generated/\n');
+      fs.mkdirSync(path.join(root, 'src/generated'), { recursive: true });
+    }
+    const ignored = path.join(clientDir, 'src/generated/output');
+    fs.writeFileSync(ignored, 'keep');
+    await runCli(['pull'], path.join(clientDir, 'src'));
+    assert.equal(fs.readFileSync(ignored, 'utf8'), 'keep');
+    const missing = await runCliCapture(['diff', 'generated/'], path.join(clientDir, 'src'));
+    assert.equal(missing.code, 2);
+  });
+
+  it('refuses to pull through an external junction and to serve its contents', async () => {
+    await runCli(['client', 'config', serverUrl], clientDir);
+    fs.symlinkSync(configDir, path.join(clientDir, 'src'), 'junction');
+    const pull = await runCliCapture(['pull', 'src/index.js'], clientDir);
+    assert.equal(pull.code, 1);
+    assert.ok(!fs.existsSync(path.join(configDir, 'index.js')));
+    fs.symlinkSync(configDir, path.join(serverDir, 'link'), 'junction');
+    const { token } = JSON.parse(fs.readFileSync(path.join(configDir, 'client.json')));
+    for (const method of ['GET', 'POST', 'DELETE']) {
+      const res = await fetch(serverUrl + '/api/file?path=link/client.json', {
+        method, headers: { Authorization: 'Bearer ' + token, 'X-Path': 'link/client.json' }
+      });
+      assert.equal(res.status, 403);
+    }
+  });
+
+  it('writes complete large diff and exec JSON to pipes', async () => {
+    await runCli(['client', 'config', serverUrl], clientDir);
+    fs.mkdirSync(path.join(serverDir, 'bulk'));
+    for (let i = 0; i < 1000; i++) fs.writeFileSync(path.join(serverDir, 'bulk', String(i)), 'a');
+    const diff = await runCliCapture(['diff', 'bulk', '--json'], clientDir);
+    assert.equal(diff.code, 1);
+    assert.equal(JSON.parse(diff.stdout).files.length, 1000);
+    const result = await runCliCapture(['exec', '--json', "node -e \"process.stdout.write('a'.repeat(100000))\""], clientDir);
+    assert.equal(result.code, 0);
+    assert.equal(JSON.parse(result.stdout).stdout.length, 100000);
+  });
+
   it('syncs files from server to client', async () => {
     // Configure client (password comes from LANSNC_PASSWORD, verified against server)
     const configResult = await runCli(['client', 'config', serverUrl.replace('http://', '')], clientDir);

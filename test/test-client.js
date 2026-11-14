@@ -193,7 +193,7 @@ describe('sync logic', () => {
       assert.strictEqual(plan.toDelete[0].path, 'local-only.txt');
     });
 
-    it('skips unchanged files (mtime match)', () => {
+    it('skips unchanged files (matching hash)', () => {
       const serverFiles = [
         { path: 'same.txt', size: 10, mtime: 1000, hash: 'abc123' }
       ];
@@ -268,6 +268,13 @@ describe('sync logic', () => {
       assert.strictEqual(plan.toDelete.length, 0);
       assert.strictEqual(plan.toSkip.length, 2);
     });
+  });
+
+  it('transfers different content in both directions when size and mtime match', () => {
+    const local = { path: 'edge.txt', size: 4, mtime: 1000, hash: 'local' };
+    const remote = { ...local, hash: 'remote' };
+    assert.deepEqual(computePullPlan([remote], [local], false).toDownload, [remote]);
+    assert.deepEqual(computePushPlan([local], [remote], false).toUpload, [local]);
   });
 
   describe('computePushPlan', () => {
@@ -635,8 +642,6 @@ describe('computeDiffInventory', () => {
   });
 
   it('judges by hash only: equal hash with different mtime/size is still in sync', () => {
-    // push/pull 有 mtime+size 快路径;diff 必须只认内容(hash),
-    // 避免「diff 说 modified、push 却说 skip」的自相矛盾
     const result = computeDiffInventory(
       [localFile('a.js', 'h1', 10, 100)],
       [serverFile('a.js', 'h1', 88, 999)]

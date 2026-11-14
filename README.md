@@ -2,13 +2,6 @@
 
 A minimal LAN file sync tool with optional remote command execution.
 
-> The remote-exec capability was developed on `feature/remote-exec` and briefly
-> released under the temporary name `lansyncopt` (separate command and config
-> dir `~/.lansyncopt`) so it could run side by side with the older
-> file-sync-only `lansync`. It is now merged back under the name `lansync`.
-> If you upgrade from a `lansyncopt`-era install, re-run `server start` /
-> `client config` — configuration left in `~/.lansyncopt` is not migrated.
-
 ## Features
 
 - Simple CLI interface
@@ -18,7 +11,7 @@ A minimal LAN file sync tool with optional remote command execution.
 - Content-based sync with MD5 hash verification
 - `diff` command: read-only inventory comparison between local and server
   (which files are modified / only on one side), with JSON output and
-  sync-state exit codes, so agents can script `diff && push`
+  sync-state exit codes for scripts
 - Windows ↔ macOS/Linux safe: canonical forward-slash paths on the wire, so
   nested directories, patterns, and Unicode filenames survive sync in both
   directions
@@ -31,20 +24,19 @@ A minimal LAN file sync tool with optional remote command execution.
 
 ## Requirements
 
-- Node.js >= 18.0.0
+- Node.js >= 18.3.0
 - npm
 
 ## Installation
 
-### Quick Install (macOS / Linux)
+### Install from this checkout (macOS, Linux, or Git Bash on Windows)
 
 ```bash
 ./setup.sh
 ```
 
-On this trial branch, setup installs the `lansyncopt` command into the npm global prefix.
-Its code lives in `~/.lansyncopt/app`, its configuration in `~/.lansyncopt`, and its default server port is 8002.
-Run setup from this checkout. Reinstallation preserves the trial configuration.
+Setup installs the `lansync` command into the npm global prefix and copies the application to `~/.lansync/app`. The default port is 8001. Existing `lansync` client and server settings live in `~/.lansync`. Restart a running server to load the updated code. If you used the separate `lansyncopt` trial, configure the production client and server with `lansync` when switching.
+
 See [file selection and directory handling](docs/sync-scope-design.md).
 
 ### Manual Install
@@ -57,8 +49,10 @@ npm link
 ## Uninstallation
 
 ```bash
-rm -rf ~/.lansyncopt
-npm unlink -g lansyncopt
+lansync server stop
+npm unlink -g lansync
+# Optional: remove installed files and saved settings
+rm -rf ~/.lansync
 ```
 
 ## Usage
@@ -66,47 +60,47 @@ npm unlink -g lansyncopt
 ### Server
 
 ```bash
-# Start sync server (default port 8002). Remote exec is ON by default at
+# Start sync server (default port 8001). Remote exec is ON by default at
 # the 'normal' mode (catastrophic blocklist enforced); change it with --exec.
 # Prompts for a password; every request must carry the matching token.
-lansyncopt server start
-lansyncopt server start --exec strict
+lansync server start
+lansync server start --exec strict
 
 # Stop server. stop verifies the port afterwards: if an orphan process still
 # holds it (lost config / killed half-start), it shows the owner PID and asks
 # to kill it interactively; -y kills without asking (agent-safe: non-TTY
 # stdin never blocks and defaults to "leave it running")
-lansyncopt server stop
-lansyncopt server stop -y
+lansync server stop
+lansync server stop -y
 
 # Check server status
-lansyncopt server status
+lansync server status
 ```
 
 ### Client
 
 ```bash
 # Configure server address + password (verified against the server; saves token)
-lansyncopt client config <ip:port>
+lansync client config <ip:port>
 
 # Pull files from server
-lansyncopt pull [pattern]
+lansync pull [path ...]
 
 # Push files to server
-lansyncopt push [pattern]
+lansync push [path ...]
 
 # Pull without deleting local files
-lansyncopt pull --no-delete
+lansync pull --no-delete
 
 # Push without deleting remote files
-lansyncopt push --no-delete
+lansync push --no-delete
 
 # Check whether local and server are in sync - no transfer, no deletion.
 # Prints modified / local-only / server-only files; --json for agents.
 # Exit code: 0 = in sync, 1 = differs, 2 = error
-lansyncopt diff
-lansyncopt diff src
-lansyncopt diff --json
+lansync diff
+lansync diff src
+lansync diff --json
 ```
 
 ### Authentication
@@ -130,8 +124,8 @@ values are case-insensitive:
 #   --exec all       allow everything
 
 # Run a command on the server (quote the whole command)
-lansyncopt exec "git pull"
-lansyncopt exec --json "npm test"   # machine-readable output for agents
+lansync exec "git pull"
+lansync exec --json "npm test"   # machine-readable output for agents
 ```
 
 Behavior notes for `exec`:
@@ -150,13 +144,14 @@ Behavior notes for `exec`:
 
 ```bash
 # Sync a specific file
-lansyncopt pull file.txt
+lansync pull file.txt
 
 # Sync an entire directory (recursive)
-lansyncopt pull src
+lansync pull src
 
 # Sync with glob pattern
-lansyncopt pull "src/**/*.js"
+lansync pull "src/**/*.js"
+lansync push README.md src/
 
 # Pattern only affects matched files - others are left untouched
 # When pattern is specified, files outside the pattern are NOT deleted
@@ -164,11 +159,7 @@ lansyncopt pull "src/**/*.js"
 
 ## Sync Algorithm
 
-1. **Fast path**: If mtime and size match exactly, skip the file
-2. **Hash verification**: If mtime differs, compare MD5 hash of content
-3. **Smart sync**: Only transfer files with different content
-
-This avoids unnecessary transfers when only timestamps differ.
+Each push, pull, or diff computes an MD5 digest for every non-ignored file under the current directory on both machines. For paths present on both sides, matching digests mean the file is in sync. Different digests trigger an upload or download in the chosen direction. Size and modification time are reported as metadata.
 
 ## Fault Tolerance
 
@@ -204,15 +195,15 @@ behaves identically:
 
 ```bash
 # On machine A (server)
-lansyncopt server start --exec strict
-# Server running at http://192.168.1.100:8002
+lansync server start --exec strict
+# Server running at http://192.168.1.100:8001
 
 # On machine B (client)
-lansyncopt client config 192.168.1.100:8002   # prompts for the same password
-lansyncopt pull              # Sync all files
-lansyncopt pull "src/**"     # Sync only src directory
-lansyncopt push              # Push local changes to server
-lansyncopt exec "npm test"   # Run tests on machine A
+lansync client config 192.168.1.100:8001   # prompts for the same password
+lansync pull              # Sync all files
+lansync pull "src/**"     # Sync only src directory
+lansync push              # Push local changes to server
+lansync exec "npm test"   # Run tests on machine A
 ```
 
 ## Design
@@ -224,3 +215,5 @@ design (auth model, command policy tiers, disconnect-kill, audit) and
 ## License
 
 MIT
+
+If any file transfer fails, push and pull skip all planned deletions for that run. Run the command again to compare fresh inventories and retry.

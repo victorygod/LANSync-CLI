@@ -53,9 +53,7 @@ DELETE /api/file?path=<相对路径>   # 删除文件
 ```json
 {
   "files": [
-    { "path": "readme.md", "size": 1024, "mtime": 1679587200000 },
-    { "path": "package.json", "size": 512, "mtime": 1679587100000 },
-    { "path": "src/index.js", "size": 2048, "mtime": 1679587300000 }
+    { "path": "readme.md", "size": 1024, "mtime": 1679587200000, "hash": "098f6bcd4621d373cade4e832627b4f6" }
   ]
 }
 ```
@@ -158,9 +156,9 @@ lansync server status             # 输出 IP:port、根目录、运行状态
 
 ```bash
 lansync client config <ip:port>   # 配置服务器地址（同时记录当前工作目录）
-lansync pull [pattern] [--no-delete]  # 拉取文件（无参数=完整同步）
-lansync push [pattern] [--no-delete]  # 推送文件（无参数=完整同步）
-lansync diff [pattern] [--json]   # 清单级 diff：比较本地与 server（只读，不传输）
+lansync pull [path ...] [--no-delete]  # 拉取文件（无参数=完整同步）
+lansync push [path ...] [--no-delete]  # 推送文件（无参数=完整同步）
+lansync diff [path ...] [--json]   # 清单级 diff：比较本地与 server（只读，不传输）
 lansync client status             # 查看当前配置
 ```
 
@@ -168,7 +166,7 @@ lansync client status             # 查看当前配置
 
 | 参数 | 说明 |
 |------|------|
-| `pattern` | 可选，glob 模式过滤文件，如 `*.js` 或 `src/**` |
+| `path ...` | 可选，支持多个文件、目录或 glob，如 `*.js` 或 `src/**` |
 | `--no-delete` | 不删除目标端多余文件，只同步新增和修改的文件 |
 | `--json`（diff） | machine-friendly 输出；stdout 只含 JSON |
 
@@ -179,8 +177,7 @@ lansync client status             # 查看当前配置
 
 设计要点：
 
-- **判定只用 hash**，不复用 push/pull 的 mtime+size 快路径——diff 是事实报告，
-  走快路径会出现「diff 说 modified、push 却说 skip」的自相矛盾
+- diff、push、pull 均按相同路径的 MD5 判断内容是否一致。
 - **不偏向 push/pull 任何一方**：status 只有 `modified` / `local-only` / `server-only`
   三态，方向（上传还是下载）留给后续 push/pull 决定
 - 被忽略文件（.gitignore + 默认规则）不参与 diff；输出按 path 排序，
@@ -231,13 +228,13 @@ lansync client status             # 查看当前配置
 2. 检查当前目录是否在工作目录内，若不在则拒绝执行并提示
 3. 计算当前目录相对于工作目录的 pathPrefix
 4. 读取工作目录下的 .gitignore（如存在）
-5. GET /api/list?path=<pathPrefix> 获取 server 端文件列表（含 size/mtime）
+5. GET /api/list?path=<pathPrefix> 获取 server 端文件列表（含 size/mtime/hash）
 6. 根据 .gitignore 规则过滤文件列表
 7. 如有 pattern 参数，再次用 glob 过滤
 8. 对比本地文件：
    - server 有、本地无 → 下载
-   - server 有、本地有、size 或 mtime 不同 → 下载
-   - server 有、本地有、size 和 mtime 都相同 → 跳过
+   - server 有、本地有、MD5 不同 → 下载
+   - server 有、本地有、MD5 相同 → 跳过
    - server 无、本地有、无 --no-delete → 删除本地文件
 9. 逐个调用 GET /api/file 下载文件
 10. 保持目录结构写入本地
@@ -252,14 +249,14 @@ lansync client status             # 查看当前配置
 2. 检查当前目录是否在工作目录内，若不在则拒绝执行并提示
 3. 计算当前目录相对于工作目录的 pathPrefix
 4. 读取工作目录下的 .gitignore（如存在）
-5. 扫描当前目录所有文件（获取 size/mtime）
+5. 扫描当前目录所有文件（获取 size/mtime/hash）
 6. 根据 .gitignore 规则过滤文件列表
 7. 如有 pattern 参数，再次用 glob 过滤
-8. GET /api/list?path=<pathPrefix> 获取 server 端文件列表（含 size/mtime）
+8. GET /api/list?path=<pathPrefix> 获取 server 端文件列表（含 size/mtime/hash）
 9. 对比 server 端文件：
    - 本地有、server 无 → 上传
-   - 本地有、server 有、size 或 mtime 不同 → 上传
-   - 本地有、server 有、size 和 mtime 都相同 → 跳过
+   - 本地有、server 有、MD5 不同 → 上传
+   - 本地有、server 有、MD5 相同 → 跳过
    - 本地无、server 有、无 --no-delete → 删除 server 文件
 10. 逐个调用 POST /api/file 上传文件
 11. 逐个调用 DELETE /api/file 删除 server 端多余文件
@@ -322,12 +319,7 @@ dist/
 
 ### 9.1 检测策略
 
-为避免传输未修改的文件，使用 **size + mtime** 双重校验：
-
-| 检测项 | 说明 |
-|--------|------|
-| 文件大小 | 快速排除，size 不同则一定修改过 |
-| 修改时间 | mtime 不同则认为修改过 |
+每次扫描都对当前目录树中未被忽略的文件计算 MD5。对于两端都有的路径，摘要一致即跳过；摘要不同则按同步方向传输。
 
 ### 9.2 API 扩展
 
@@ -339,7 +331,8 @@ dist/
     {
       "path": "src/index.js",
       "size": 1024,
-      "mtime": 1679587200000
+      "mtime": 1679587200000,
+      "hash": "098f6bcd4621d373cade4e832627b4f6"
     }
   ]
 }
@@ -350,22 +343,21 @@ dist/
 **Pull 时：**
 ```
 本地无文件 → 下载
-本地有文件，size 或 mtime 不同 → 下载
-本地有文件，size 和 mtime 都相同 → 跳过
+本地有文件，MD5 不同 → 下载
+本地有文件，MD5 相同 → 跳过
 ```
 
 **Push 时：**
 ```
 server 无文件 → 上传
-server 有文件，size 或 mtime 不同 → 上传
-server 有文件，size 和 mtime 都相同 → 跳过
+server 有文件，MD5 不同 → 上传
+server 有文件，MD5 相同 → 跳过
 ```
 
 ### 9.4 注意事项
 
 - mtime 使用 Unix 时间戳（毫秒）
-- 不同机器的时钟可能有偏差，但局域网内通常可忽略
-- 如需更精确检测，可后续扩展为 hash 校验
+- size 和 mtime 用于展示文件元数据。
 
 ## 十、关键实现细节
 
@@ -463,7 +455,8 @@ function walkDir(dir, baseDir, ignoreRules) {
         results.push({
           path: relativePath,
           size: stat.size,
-          mtime: stat.mtimeMs
+          mtime: stat.mtimeMs,
+          hash: crypto.createHash('md5').update(fs.readFileSync(fullPath)).digest('hex')
         });
       }
     }
@@ -488,7 +481,7 @@ function walkDir(dir, baseDir, ignoreRules) {
     "minimatch": "^9.0.0"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=18.3.0"
   }
 }
 ```
@@ -497,7 +490,7 @@ function walkDir(dir, baseDir, ignoreRules) {
 
 ### 12.1 前置条件
 
-- Node.js >= 18.0.0（支持原生 fetch）
+- Node.js >= 18.3.0（支持原生 fetch）
 - npm 或其他包管理器
 
 ### 12.2 安装步骤

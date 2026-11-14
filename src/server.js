@@ -1,6 +1,6 @@
 // src/server.js
 import os from 'node:os';
-import { pruneEmptyDirs } from './directories.js';
+import { pruneEmptyDirs, resolveSyncPath } from './directories.js';
 import path from 'node:path';
 import fs from 'node:fs';
 import http from 'node:http';
@@ -12,7 +12,7 @@ import { minimatch } from 'minimatch';
 import { readServerConfig, writeServerConfig, getConfigDir } from './config.js';
 import { checkPolicy, detectSelfReference, resolvePolicy, DEFAULT_POLICY, DEFAULT_BLACKLIST, DEFAULT_GRAYLIST } from './policy.js';
 
-export const DEFAULT_PORT = 8002;
+export const DEFAULT_PORT = 8001;
 
 // server.json 里的 policy 归一化:未识别值(旧 exec-* 长名 / 手改 / 大小写变体)
 // 兜成 DEFAULT_POLICY('normal'),与旧「未识别 → 仅黑名单兜底」行为等价(黑拦灰放)。
@@ -109,39 +109,7 @@ function matchesPattern(filepath, pattern) {
 }
 
 export function sanitizePath(requestedPath, rootDir) {
-  // Decode URL encoding
-  let decoded;
-  try {
-    decoded = decodeURIComponent(requestedPath);
-  } catch {
-    return null;
-  }
-
-  // Block null bytes
-  if (decoded.includes('\0')) {
-    return null;
-  }
-
-  // Normalize rootDir to handle different path separators (Windows compatibility)
-  const normalizedRoot = path.normalize(rootDir);
-
-  // Normalize and resolve
-  const absolutePath = path.resolve(normalizedRoot, decoded);
-
-  // Ensure path is within root (normalize both for consistent comparison)
-  const normalizedAbs = path.normalize(absolutePath);
-
-  // Use relative path check for cross-platform compatibility
-  const relativePath = path.relative(normalizedRoot, normalizedAbs);
-
-  // If relative path starts with '..' or is absolute, it's outside root
-  // Note: we check for '../' or '..\\' prefix, not just '..' substring
-  // because valid filenames can contain '..' like '[...404].css'
-  if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
-    return null;
-  }
-
-  return absolutePath;
+  return resolveSyncPath(rootDir, requestedPath);
 }
 
 export { pruneEmptyDirs } from './directories.js';
@@ -170,39 +138,30 @@ export function walkDir(dir, baseDir, ignoreRules, directories = []) {
   const results = [];
 
   function walk(currentDir) {
-    let entries;
-    try {
-      entries = fs.readdirSync(currentDir, { withFileTypes: true });
-    } catch {
-      return;
-    }
+    const entries = fs.readdirSync(currentDir, { withFileTypes: true });
 
     for (const entry of entries) {
       const fullPath = path.join(currentDir, entry.name);
-      const relativePath = path.relative(baseDir, fullPath);
+      const relativePath = normalizePath(path.relative(baseDir, fullPath));
 
       if (shouldIgnore(relativePath, ignoreRules)) continue;
 
       if (entry.isDirectory()) {
-        directories.push(normalizePath(relativePath));
+        directories.push(relativePath);
         walk(fullPath);
       } else if (entry.isFile()) {
-        try {
-          const stat = fs.statSync(fullPath);
-          const content = fs.readFileSync(fullPath);
-          const hash = crypto.createHash('md5').update(content).digest('hex');
-          // wire 统一正斜杠:win32 上 path.relative 产出反斜杠,原样上线的话
-          // POSIX client 会 join 出字面含 "\" 的扁平文件;"docs/file.txt" 在
-          // Windows 端读取(以及 sanitizePath 的 path.resolve)同样有效
-          results.push({
-            path: normalizePath(relativePath),
-            size: stat.size,
-            mtime: stat.mtimeMs,
-            hash
-          });
-        } catch {
-          // Skip files we can't stat
-        }
+        const stat = fs.statSync(fullPath);
+        const content = fs.readFileSync(fullPath);
+        const hash = crypto.createHash('md5').update(content).digest('hex');
+        // wire 统一正斜杠:win32 上 path.relative 产出反斜杠,原样上线的话
+        // POSIX client 会 join 出字面含 "\" 的扁平文件;"docs/file.txt" 在
+        // Windows 端读取(以及 sanitizePath 的 path.resolve)同样有效
+        results.push({
+          path: relativePath,
+          size: stat.size,
+          mtime: stat.mtimeMs,
+          hash
+        });
       }
     }
   }
@@ -473,7 +432,14 @@ async function handleFileGet(url, rootDir, res) {
 async function handleFilePost(req, rootDir, res) {
   const encodedPath = req.headers['x-path'];
   // Decode and normalize path separators for cross-platform compatibility
-  const filePath = encodedPath ? normalizePath(decodeURIComponent(encodedPath)) : null;
+  let filePath;
+  try {
+    filePath = encodedPath && normalizePath(decodeURIComponent(encodedPath));
+  } catch {
+    res.writeHead(400);
+    res.end(JSON.stringify({ error: 'Malformed X-Path header' }));
+    return;
+  }
   if (!filePath) {
     res.writeHead(400, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Missing X-Path header' }));
@@ -487,15 +453,15 @@ async function handleFilePost(req, rootDir, res) {
     return;
   }
 
-  // Ensure parent directory exists
-  const parentDir = path.dirname(absolutePath);
-  fs.mkdirSync(parentDir, { recursive: true });
-
-  // Read body and write file
   const chunks = [];
-  for await (const chunk of req) {
-    chunks.push(chunk);
+  for await (const chunk of req) chunks.push(chunk);
+  const destination = sanitizePath(filePath, rootDir);
+  if (!destination || destination !== absolutePath) {
+    res.writeHead(403);
+    res.end(JSON.stringify({ error: 'Invalid path' }));
+    return;
   }
+  fs.mkdirSync(path.dirname(destination), { recursive: true });
   fs.writeFileSync(absolutePath, Buffer.concat(chunks));
 
   res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -525,23 +491,27 @@ async function handleFileDelete(url, rootDir, res) {
 
   const scope = url.searchParams.get('scope') || '';
   const boundary = sanitizePath(scope, rootDir);
-  if (!boundary || !absolutePath.startsWith(boundary.endsWith(path.sep) ? boundary : boundary + path.sep)) {
+  const relative = path.relative(path.resolve(rootDir, scope), path.resolve(rootDir, filePath));
+  if (!relative || relative === '..' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative) ||
+      !boundary || !absolutePath.startsWith(boundary.endsWith(path.sep) ? boundary : boundary + path.sep)) {
     res.writeHead(400);
     res.end(JSON.stringify({ error: 'Invalid deletion scope' }));
     return;
   }
-  fs.unlinkSync(absolutePath);
+  const deletePath = path.resolve(rootDir, filePath);
+  fs.unlinkSync(deletePath);
 
   // 删除成功后向上修剪空目录:本地删掉整个目录再 push 时,server 端不再
   // 残留空目录壳(协议只列文件,这些空壳对后续 push 永远不可见,会一直积累)
-  pruneEmptyDirs(absolutePath, boundary);
+  pruneEmptyDirs(deletePath, path.resolve(rootDir, scope));
 
   res.writeHead(200, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify({ success: true }));
 }
 
 function readGitignore(rootDir) {
-  const gitignorePath = path.join(rootDir, '.gitignore');
+  const gitignorePath = sanitizePath('.gitignore', rootDir);
+  if (!gitignorePath) throw new Error('Invalid .gitignore path');
   const rules = getDefaultIgnoreRules();
 
   if (fs.existsSync(gitignorePath)) {
@@ -642,7 +612,7 @@ export async function startServerDaemon(rootDir, port = DEFAULT_PORT, token, pol
     // 只拒绝、不杀:占用者可能是旧 lansync server 或其他应用,不能自动 kill。
     // 给出明确出路:换端口,或用对应命令停掉占用者。
     throw new Error(
-      `Port ${port} is in use. Choose another port with lansyncopt server start --port <n>.`
+      `Port ${port} is in use. Choose another port with lansync server start --port <n>.`
     );
   }
 

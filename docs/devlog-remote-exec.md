@@ -250,3 +250,9 @@ getPortOwnerPid 听本地端口返回自身 pid / 空闲端口返回 null;getPid
 **测试**:旧值全量映射;新增 resolvePolicy 单测(归一/trim/旧长名 null/默认钉死)、server.json 旧长名兜底为 normal、CLI 非法值 exit 1 精确文案、`--exec STRICT` 大小写归一且落盘归一值、空格口令拒绝;集成套件删掉显式 `--policy`,整 suite 跑在默认 normal 上并断言 `Exec: normal`。136/136 全绿。
 
 **部署注意**:默认行为从「exec 全关」变为「拦黑名单」,升级后各机要重跑安装(setup.sh/npm link 副本不随仓库同步更新)并重启 daemon;依赖旧长名的脚本会 exit 1。
+
+## 2026-11-14 · 修复同大小、同修改时间的文件漏同步
+
+在 macOS 客户端和 Windows 服务端分别写入 `BBBB` 和 `AAAA`，将两端修改时间设成同一秒。此时 `diff` 报告 `modified`，但 `push` 和 `pull` 都成功退出并报告 `1 skipped`，同步后差异仍在。
+
+两个方向的传输计划都在比较哈希之前按大小和修改时间跳过了文件。现在直接比较两端清单已有的内容哈希，哈希不同就按所选方向传输。回归用例固定相同的大小和修改时间，分别断言文件进入下载和上传清单。

@@ -15,7 +15,7 @@ process.env.LANSNC_CONFIG_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'lansync-c
 
 describe('server utilities', () => {
   describe('sanitizePath', () => {
-    const rootDir = '/tmp/project';
+    const rootDir = fs.realpathSync(os.tmpdir());
 
     it('returns absolute path for valid relative path', () => {
       const result = sanitizePath('src/index.js', rootDir);
@@ -24,9 +24,9 @@ describe('server utilities', () => {
       assert.strictEqual(result, path.resolve(rootDir, 'src/index.js'));
     });
 
-    it('handles URL encoded paths', () => {
+    it('preserves a literal percent escape', () => {
       const result = sanitizePath('src%20files/test.js', rootDir);
-      assert.strictEqual(result, path.resolve(rootDir, 'src files/test.js'));
+      assert.strictEqual(result, path.resolve(rootDir, 'src%20files/test.js'));
     });
 
     it('returns null for path traversal attack', () => {
@@ -46,7 +46,7 @@ describe('server utilities', () => {
     });
 
     it('handles Chinese characters in path', () => {
-      const result = sanitizePath('%E6%96%87%E4%BB%B6%E5%A4%B9/%E6%96%87%E4%BB%B6.txt', rootDir);
+      const result = sanitizePath('文件夹/文件.txt', rootDir);
       // URL decoded: 文件夹/文件.txt
       assert.ok(result !== null);
       assert.ok(result.includes('文件夹') || result.includes('%E6%96%87%E4%BB%B6%E5%A4%B9'));

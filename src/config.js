@@ -5,11 +5,10 @@ import os from 'node:os';
 
 export function getConfigDir() {
   // 支持环境变量覆盖(测试隔离 / 灰度发布)。
-  // Parallel trial installation uses its own client and server configuration.
   if (process.env.LANSNC_CONFIG_DIR) {
     return process.env.LANSNC_CONFIG_DIR;
   }
-  return path.join(os.homedir(), '.lansyncopt');
+  return path.join(os.homedir(), '.lansync');
 }
 
 function ensureConfigDir() {

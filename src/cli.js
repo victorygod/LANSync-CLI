@@ -8,7 +8,7 @@ import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { Writable } from 'node:stream';
 import { startServerDaemon, stopServerDaemon, getServerStatus, getPortOwnerPid, isOwnDaemon, killPidHard, DEFAULT_PORT } from './server.js';
-import { pull, push, diff, checkServerReachable, verifyAuth, execRemote } from './client.js';
+import { pull, push, diff, verifyAuth, execRemote } from './client.js';
 import { readClientConfig, writeClientConfig } from './config.js';
 import { deriveToken, EXEC_POLICIES, DEFAULT_POLICY, resolvePolicy } from './policy.js';
 
@@ -46,15 +46,22 @@ async function main() {
     };
     let options, paths;
     if (Object.hasOwn(definitions, key)) {
-      const parsed = parseArgs({ args: argv, allowPositionals: true, options: {
-        ...definitions[key], help: { type: 'boolean', short: 'h' }
-      } });
+      let parsed;
+      try {
+        parsed = parseArgs({ args: argv, allowPositionals: true, options: {
+          ...definitions[key], help: { type: 'boolean', short: 'h' }
+        } });
+      } catch (err) {
+        if (key === 'exec') throw new Error(`${err.message}. Quote the entire remote command, e.g. lansync exec "git status"`);
+        throw err;
+      }
       options = parsed.values;
       paths = parsed.positionals;
       if (options.help) return printHelp();
       const variable = ['push', 'pull', 'diff'].includes(key);
       const count = key === 'exec' || key === 'client config' ? 1 : 0;
-      if (!variable && paths.length !== count) throw new Error(`Invalid arguments for ${key}. See lansyncopt ${key} --help`);
+      if (key === 'exec' && paths.length !== 1) throw new Error('Quote the entire remote command, e.g. lansync exec "git status"');
+      if (!variable && paths.length !== count) throw new Error(`Invalid arguments for ${key}. See lansync ${key} --help`);
     } else if (grouped && ['--help', '-h'].includes(args[1])) return printHelp();
     switch (command) {
       case 'server':
@@ -77,7 +84,7 @@ async function main() {
         break;
       case '--version':
       case '-v':
-        console.log(`lansyncopt v${VERSION}`);
+        console.log(`lansync v${VERSION}`);
         break;
       case '--help':
       case '-h':
@@ -98,20 +105,20 @@ async function main() {
 
 function printHelp() {
   console.log(`
-lansyncopt - LAN file sync tool (remote-exec)
+lansync - LAN file sync tool (remote-exec)
 
 Usage:
-  lansyncopt server start [--port <n>] [--exec <m>]  Start server daemon (prompts for password)
-  lansyncopt server stop [-y]           Stop server daemon; if the port is still
+  lansync server start [--port <n>] [--exec <m>]  Start server daemon (prompts for password)
+  lansync server stop [-y]           Stop server daemon; if the port is still
                                         held by an orphan process, show the owner
                                         and ask to kill it (Y = kill, -y = no ask)
-  lansyncopt server status              Show server status
-  lansyncopt client config <ip:port>    Configure server address + password (verified against server)
-  lansyncopt client status              Show client config
-  lansyncopt pull [path ...] [--no-delete]  Pull files from server
-  lansyncopt push [path ...] [--no-delete]  Push files to server
-  lansyncopt exec [--json] "<command>"  Execute remote command
-  lansyncopt diff [path ...] [--json]    Compare local with server without transferring
+  lansync server status              Show server status
+  lansync client config <ip:port>    Configure server address + password (verified against server)
+  lansync client status              Show client config
+  lansync pull [path ...] [--no-delete]  Pull files from server
+  lansync push [path ...] [--no-delete]  Push files to server
+  lansync exec [--json] "<command>"  Execute remote command
+  lansync diff [path ...] [--json]    Compare local with server without transferring
                                         exit 0 = in sync, 1 = differs, 2 = error
 
 All requests are authenticated with the password (Bearer token). The password is
@@ -132,15 +139,15 @@ Agent usage:
 
   1. Sync with pull/push, never as exec side effects. Each pull/push transfers
      diffs and lists changed files, so a call doubles as a diff check.
-     'lansyncopt diff [--json] [path ...]' checks sync state WITHOUT
+     'lansync diff [--json] [path ...]' checks sync state WITHOUT
      transferring: exit 0 = in sync, 1 = differs. Use it to decide whether a
      push/pull is needed.
      Run 'git commit' on the local repo BEFORE syncing: the default pull/push
      deletes files missing on the other side, uncommitted changes can be lost
      (--no-delete disables deletion).
   2. Recommended loop: keep the server copy identical to the local repo. Edit
-     locally first, git commit, 'lansyncopt push' to the server, then
-     'lansyncopt exec "<command>"' to run commands on the server.
+     locally first, git commit, 'lansync push' to the server, then
+     'lansync exec "<command>"' to run commands on the server.
 `);
 }
 
@@ -193,10 +200,10 @@ async function handleServerCommand(subCommand, options) {
 
       if (!isOwnDaemon(ownerPid)) throw new Error(`Port ${port} is held by another process (PID ${ownerPid}).`);
       if (stopped) {
-        console.log(`Warning: port ${port} is still occupied by PID ${ownerPid} (lansyncopt daemon)`);
+        console.log(`Warning: port ${port} is still occupied by PID ${ownerPid} (lansync daemon)`);
       } else {
         console.log(`No server running, but port ${port} is occupied:`);
-        console.log(`  PID ${ownerPid} (lansyncopt daemon)`);
+        console.log(`  PID ${ownerPid} (lansync daemon)`);
       }
 
       let confirmed = force;
@@ -245,7 +252,7 @@ async function handleClientCommand(subCommand, paths) {
     case 'config': {
       const serverAddr = paths[0];
       if (!serverAddr) {
-        console.error('Usage: lansyncopt client config <ip:port>');
+        console.error('Usage: lansync client config <ip:port>');
         process.exit(1);
       }
 
@@ -284,14 +291,14 @@ async function handleClientCommand(subCommand, paths) {
     case 'status': {
       const config = readClientConfig();
       if (!config) {
-        console.log('Client not configured. Run: lansyncopt client config <ip:port>');
+        console.log('Client not configured. Run: lansync client config <ip:port>');
         return;
       }
       console.log(`Server URL: ${config.serverUrl}`);
       console.log(`Working directory: ${config.workDir}`);
       console.log(`Version: ${VERSION}`);
       if (!config.token) {
-        console.log('Password: not set (re-run: lansyncopt client config <ip:port>)');
+        console.log('Password: not set (re-run: lansync client config <ip:port>)');
         return;
       }
       console.log('Password: saved');
@@ -313,21 +320,18 @@ async function handleClientCommand(subCommand, paths) {
 async function handlePullCommand(options, patterns) {
   const config = readClientConfig();
   if (!config) {
-    console.error('Client not configured. Run: lansyncopt client config <ip:port>');
+    console.error('Client not configured. Run: lansync client config <ip:port>');
     process.exit(1);
   }
 
   const { serverUrl, workDir, token } = config;
   if (!token) {
-    console.error('Client has no password. Re-run: lansyncopt client config <ip:port>');
+    console.error('Client has no password. Re-run: lansync client config <ip:port>');
     process.exit(1);
   }
   const currentDir = process.cwd();
 
   console.log(`Connecting to ${serverUrl}...`);
-
-  // 网络/鉴权失败直接抛带 cause 的错误,由 main 统一打印
-  await checkServerReachable(serverUrl, token);
 
   const pathPrefix = currentDir !== workDir ? path.relative(workDir, currentDir) : '';
   if (pathPrefix) {
@@ -364,6 +368,7 @@ async function handlePullCommand(options, patterns) {
 
   console.log(`\nSync complete: ${result.skipped.length} skipped, ${result.downloaded.length} downloaded, ${result.deleted.length} deleted`);
 
+  if (result.skippedDeletes) console.log(`Skipped ${result.skippedDeletes} planned deletions because a transfer failed.`);
   if (result.failed.length > 0) {
     console.log(`\n  Failed (${result.failed.length}):`);
     for (const file of result.failed) {
@@ -381,28 +386,25 @@ async function handlePullCommand(options, patterns) {
   }
 
   if (result.failed.length > 0) {
-    process.exit(1);
+    process.exitCode = 1;
   }
 }
 
 async function handlePushCommand(options, patterns) {
   const config = readClientConfig();
   if (!config) {
-    console.error('Client not configured. Run: lansyncopt client config <ip:port>');
+    console.error('Client not configured. Run: lansync client config <ip:port>');
     process.exit(1);
   }
 
   const { serverUrl, workDir, token } = config;
   if (!token) {
-    console.error('Client has no password. Re-run: lansyncopt client config <ip:port>');
+    console.error('Client has no password. Re-run: lansync client config <ip:port>');
     process.exit(1);
   }
   const currentDir = process.cwd();
 
   console.log(`Connecting to ${serverUrl}...`);
-
-  // 网络/鉴权失败直接抛带 cause 的错误,由 main 统一打印
-  await checkServerReachable(serverUrl, token);
 
   const pathPrefix = currentDir !== workDir ? path.relative(workDir, currentDir) : '';
   if (pathPrefix) {
@@ -439,6 +441,7 @@ async function handlePushCommand(options, patterns) {
 
   console.log(`\nSync complete: ${result.skipped.length} skipped, ${result.uploaded.length} uploaded, ${result.deleted.length} deleted`);
 
+  if (result.skippedDeletes) console.log(`Skipped ${result.skippedDeletes} planned deletions because a transfer failed.`);
   if (result.failed.length > 0) {
     console.log(`\n  Failed (${result.failed.length}):`);
     for (const file of result.failed) {
@@ -456,7 +459,7 @@ async function handlePushCommand(options, patterns) {
   }
 
   if (result.failed.length > 0) {
-    process.exit(1);
+    process.exitCode = 1;
   }
 }
 
@@ -472,10 +475,10 @@ async function handleDiffCommand(options, patterns) {
 
   const config = readClientConfig();
   if (!config) {
-    fail('Client not configured. Run: lansyncopt client config <ip:port>');
+    fail('Client not configured. Run: lansync client config <ip:port>');
   }
   if (!config.token) {
-    fail('Client has no password. Re-run: lansyncopt client config <ip:port>');
+    fail('Client has no password. Re-run: lansync client config <ip:port>');
   }
 
   const { serverUrl, workDir, token } = config;
@@ -490,7 +493,8 @@ async function handleDiffCommand(options, patterns) {
 
     if (json) {
       console.log(JSON.stringify(result, null, 2));
-      process.exit(result.inSync ? 0 : 1);
+      process.exitCode = result.inSync ? 0 : 1;
+      return;
     }
 
     if (result.prefix) {
@@ -515,7 +519,7 @@ async function handleDiffCommand(options, patterns) {
 
     const s = result.summary;
     console.log(`\n${s.modified} modified, ${s.localOnly} local-only, ${s.serverOnly} server-only, ${s.inSync} in sync`);
-    process.exit(1);
+    process.exitCode = 1;
   } catch (err) {
     fail(err.message);
   }
@@ -524,11 +528,11 @@ async function handleDiffCommand(options, patterns) {
 async function handleExecCommand(options, patterns) {
   const config = readClientConfig();
   if (!config) {
-    console.error('Client not configured. Run: lansyncopt client config <ip:port>');
+    console.error('Client not configured. Run: lansync client config <ip:port>');
     process.exit(1);
   }
   if (!config.token) {
-    console.error('Client has no password. Re-run: lansyncopt client config <ip:port>');
+    console.error('Client has no password. Re-run: lansync client config <ip:port>');
     process.exit(1);
   }
 
@@ -536,7 +540,7 @@ async function handleExecCommand(options, patterns) {
   const json = options.json;
   const command = patterns[0];
   if (!command) {
-    console.error('Usage: lansyncopt exec [--json] "<command>"');
+    console.error('Usage: lansync exec [--json] "<command>"');
     process.exit(1);
   }
 
@@ -548,7 +552,7 @@ async function handleExecCommand(options, patterns) {
     if (result.stdout) process.stdout.write(result.stdout);
     if (result.stderr) process.stderr.write(result.stderr);
   }
-  process.exit(result.exitCode ?? 0);
+  process.exitCode = result.exitCode ?? 0;
 }
 
 // 非交互(stdin 非 TTY)直接视作否:agent/exec 场景不能挂起干等输入
