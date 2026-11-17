@@ -133,6 +133,26 @@ describe('integration', () => {
     assert.equal(missing.code, 2);
   });
 
+  it('does not let a root-anchored ignore rule hide nested directories on push', async () => {
+    for (const root of [clientDir, serverDir]) {
+      fs.writeFileSync(path.join(root, '.gitignore'), '/rss/*\n');
+    }
+    fs.mkdirSync(path.join(clientDir, 'rss'));
+    fs.writeFileSync(path.join(clientDir, 'rss', 'excluded.ts'), 'root');
+    fs.mkdirSync(path.join(clientDir, 'vendor', 'rss'), { recursive: true });
+    fs.writeFileSync(path.join(clientDir, 'vendor', 'rss', 'keep.ts'), 'nested');
+
+    await runCli(['client', 'config', serverUrl], clientDir);
+    await runCli(['push'], clientDir);
+
+    // "/rss/*" only covers the root rss/ directory...
+    assert.ok(!fs.existsSync(path.join(serverDir, 'rss', 'excluded.ts')));
+    // ...but a nested vendor/rss/ must still be transferred and visible to diff.
+    assert.equal(fs.readFileSync(path.join(serverDir, 'vendor', 'rss', 'keep.ts'), 'utf8'), 'nested');
+    const diff = await runCliCapture(['diff', '--json'], clientDir);
+    assert.equal(diff.code, 0);
+  });
+
   it('refuses to pull through an external junction and to serve its contents', async () => {
     await runCli(['client', 'config', serverUrl], clientDir);
     fs.symlinkSync(configDir, path.join(clientDir, 'src'), 'junction');

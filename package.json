@@ -1,6 +1,6 @@
 {
   "name": "lansync",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "Minimal LAN file sync tool with optional remote command execution",
   "type": "module",
   "bin": {

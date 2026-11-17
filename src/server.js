@@ -8,8 +8,8 @@ import net from 'node:net';
 import crypto from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { minimatch } from 'minimatch';
 import { readServerConfig, writeServerConfig, getConfigDir } from './config.js';
+import { parseGitignore, shouldIgnore } from './ignore.js';
 import { checkPolicy, detectSelfReference, resolvePolicy, DEFAULT_POLICY, DEFAULT_BLACKLIST, DEFAULT_GRAYLIST } from './policy.js';
 
 export const DEFAULT_PORT = 8001;
@@ -51,62 +51,9 @@ export function getDefaultIgnoreRules() {
   return [...DEFAULT_IGNORE_RULES];
 }
 
-export function parseGitignore(content) {
-  return content
-    .split('\n')
-    .map(line => line.trim())
-    .filter(line => line && !line.startsWith('#'));
-}
-
-export function shouldIgnore(filepath, rules) {
-  let ignored = false;
-  for (const rule of rules) {
-    // Handle negation rules (starting with !)
-    if (rule.startsWith('!')) {
-      const negPattern = rule.slice(1);
-      if (matchesPattern(filepath, negPattern)) {
-        ignored = false;  // Un-ignore the file
-      }
-      continue;
-    }
-    if (matchesPattern(filepath, rule)) {
-      ignored = true;
-    }
-  }
-  return ignored;
-}
-
-function matchesPattern(filepath, pattern) {
-  // Handle directory patterns (ending with /)
-  if (pattern.endsWith('/')) {
-    const dirRule = pattern.slice(0, -1);
-    // Match directory itself or anything inside
-    if (filepath === dirRule || filepath.startsWith(dirRule + '/') || filepath.startsWith(dirRule + '\\')) {
-      return true;
-    }
-    // Also match with minimatch for glob patterns like dist/
-    if (minimatch(filepath, pattern + '**', { dot: true })) {
-      return true;
-    }
-  }
-  // Direct match
-  if (minimatch(filepath, pattern, { dot: true })) {
-    return true;
-  }
-  // Match file inside a directory pattern (for bare names like node_modules)
-  if (filepath === pattern || filepath.startsWith(pattern + '/') || filepath.startsWith(pattern + '\\')) {
-    return true;
-  }
-  // Match directory anywhere in the path
-  if (filepath.includes('/' + pattern + '/') || filepath.includes('\\' + pattern + '\\')) {
-    return true;
-  }
-  // Match with ** prefix for glob patterns
-  if (minimatch(filepath, '**/' + pattern, { dot: true })) {
-    return true;
-  }
-  return false;
-}
+// Re-export the shared matcher so existing callers (and tests) keep importing
+// from server.js; the implementation lives in ignore.js so the client agrees.
+export { parseGitignore, shouldIgnore };
 
 export function sanitizePath(requestedPath, rootDir) {
   return resolveSyncPath(rootDir, requestedPath);

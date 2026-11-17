@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { pruneEmptyDirs, resolveSyncPath } from './directories.js';
+import { shouldIgnore, parseGitignore } from './ignore.js';
 import { minimatch } from 'minimatch';
 
 const TIMEOUT_MS = 10000;
@@ -306,43 +307,6 @@ export function scanLocalFiles(dir, ignoreRules, directories = [], workDir = dir
   return results;
 }
 
-function shouldIgnore(filepath, rules) {
-  let ignored = false;
-  for (const rule of rules) {
-    // Handle negation rules (starting with !)
-    if (rule.startsWith('!')) {
-      const negPattern = rule.slice(1);
-      if (matchesPattern(filepath, negPattern)) {
-        ignored = false;  // Un-ignore the file
-      }
-      continue;
-    }
-    if (matchesPattern(filepath, rule)) {
-      ignored = true;
-    }
-  }
-  return ignored;
-}
-
-function matchesPattern(filepath, pattern) {
-  if (pattern.endsWith('/')) {
-    const dirRule = pattern.slice(0, -1);
-    if (filepath === dirRule || filepath.startsWith(dirRule + '/') || filepath.startsWith(dirRule + '\\')) {
-      return true;
-    }
-    if (minimatch(filepath, pattern + '**', { dot: true })) {
-      return true;
-    }
-  }
-  if (minimatch(filepath, pattern, { dot: true })) {
-    return true;
-  }
-  if (minimatch(filepath, '**/' + pattern, { dot: true })) {
-    return true;
-  }
-  return false;
-}
-
 export function computePullPlan(serverFiles, localFiles, noDelete) {
   const toDownload = [];
   const toSkip = [];
@@ -516,11 +480,7 @@ function loadIgnoreRules(workDir) {
 
   if (fs.existsSync(gitignorePath)) {
     const content = fs.readFileSync(gitignorePath, 'utf-8');
-    const parsed = content
-      .split('\n')
-      .map(line => line.trim())
-      .filter(line => line && !line.startsWith('#'));
-    rules.push(...parsed);
+    rules.push(...parseGitignore(content));
   }
 
   return rules;

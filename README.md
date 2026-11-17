@@ -46,6 +46,47 @@ npm install
 npm link
 ```
 
+## Upgrading
+
+Use the one-click upgrade script from the machine that holds the new checkout:
+
+```bash
+node scripts/upgrade.js
+```
+
+- It uses `lansyncopt` (last known good) as the control channel.
+- It pushes this checkout, runs the remote tests, and canaries the new code on
+  a spare port before touching production.
+- It preserves the existing `server.json` token/root/port when switching
+  `lansync`, verifies the installed versions, and rolls back automatically on
+  failure.
+- It updates both `lansyncopt` installs and leaves the remote control daemon
+  running (use `--stop-control` or `node scripts/upgrade.js stop-control` to
+  stop it explicitly, without deleting its token/config).
+
+The repo version must be newer than the running `lansync`. Bump it in the same
+command:
+
+```bash
+node scripts/upgrade.js --bump=patch --yes
+```
+
+Check prerequisites or preview the steps without changing services:
+
+```bash
+node scripts/upgrade.js doctor
+node scripts/upgrade.js plan
+```
+
+If the command exits non-zero, give your agent:
+
+```text
+~/.lansync-upgrade/report.json
+```
+
+See the [upgrade runbook](docs/upgrade-runbook.md) for exit codes, artifacts,
+and rollback.
+
 ## Uninstallation
 
 ```bash

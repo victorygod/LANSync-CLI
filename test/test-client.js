@@ -171,6 +171,18 @@ describe('sync logic', () => {
       const paths = files.map(f => f.path);
       assert.ok(!paths.some(p => p.includes('node_modules')));
     });
+
+    it('honors root-anchored rules during the local scan', () => {
+      fs.mkdirSync(path.join(tmpDir, 'rss'));
+      fs.writeFileSync(path.join(tmpDir, 'rss', 'feed.ts'), 'root');
+      fs.mkdirSync(path.join(tmpDir, 'a', 'rss'), { recursive: true });
+      fs.writeFileSync(path.join(tmpDir, 'a', 'rss', 'feed.ts'), 'nested');
+
+      const paths = scanLocalFiles(tmpDir, ['/rss/*']).map(f => f.path);
+
+      assert.ok(!paths.includes('rss/feed.ts'));
+      assert.ok(paths.includes('a/rss/feed.ts'));
+    });
   });
 
   describe('computePullPlan', () => {

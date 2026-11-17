@@ -126,6 +126,35 @@ describe('ignore rules', () => {
       assert.ok(shouldIgnore('debug.log', rulesWithNegation));
       assert.ok(!shouldIgnore('src/index.js', rulesWithNegation));  // should not ignore
     });
+
+    it('anchors rules starting with / to the sync root', () => {
+      const rules = ['/rss/*'];
+      assert.ok(shouldIgnore('rss/data/x.json', rules));
+      assert.ok(!shouldIgnore('a/rss/x.json', rules));
+      // The regression from the issue: a nested "rss" directory must survive.
+      assert.ok(!shouldIgnore('cli_lib/news-collect/vendor/RSSHub/lib/routes/rss/feed.ts', rules));
+      assert.ok(!shouldIgnore('cli_lib/news-collect/vendor/RSSHub/lib/routes/rss/namespace.ts', rules));
+    });
+
+    it('matches unanchored rules at any depth', () => {
+      const rules = ['rss/*'];
+      assert.ok(shouldIgnore('rss/data/x.json', rules));
+      assert.ok(shouldIgnore('a/rss/x.json', rules));
+    });
+
+    it('applies anchoring to negation rules', () => {
+      const rules = ['/rss/*', '!/rss/keep.me'];
+      assert.ok(shouldIgnore('rss/data/x.json', rules));
+      assert.ok(!shouldIgnore('rss/keep.me', rules));
+      assert.ok(!shouldIgnore('a/rss/x.json', rules));
+    });
+
+    it('keeps directory rules matching at any depth unless anchored', () => {
+      assert.ok(shouldIgnore('node_modules/pkg/index.js', ['node_modules/']));
+      assert.ok(shouldIgnore('a/node_modules/pkg/index.js', ['node_modules/']));
+      assert.ok(shouldIgnore('node_modules/pkg/index.js', ['/node_modules/']));
+      assert.ok(!shouldIgnore('a/node_modules/pkg/index.js', ['/node_modules/']));
+    });
   });
 });
 
