@@ -148,6 +148,10 @@ lansync diff src
 lansync diff --json
 ```
 
+lansync syncs working-tree files only; `.git` is ignored. Commit locally
+before syncing, and commit on the far side after a push. The two commits are
+independent and git history is never transferred.
+
 ### Authentication
 
 All `/api/*` endpoints (pull/push/exec alike) require a Bearer token derived

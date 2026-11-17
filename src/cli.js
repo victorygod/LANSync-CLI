@@ -148,6 +148,9 @@ Agent usage:
   2. Recommended loop: keep the server copy identical to the local repo. Edit
      locally first, git commit, 'lansync push' to the server, then
      'lansync exec "<command>"' to run commands on the server.
+  3. Git: commit locally BEFORE syncing, and commit on the far side AFTER a
+     push. lansync copies working-tree files only; .git is ignored and the
+     two histories stay independent.
 `);
 }
 
