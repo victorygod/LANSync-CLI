@@ -2,7 +2,22 @@
 // Shared .gitignore matching for client and server. Both sides must agree:
 // the client filters its scan (push/diff) while the server filters its list,
 // so a rule that only one side understands silently diverges the inventories.
-import { minimatch } from 'minimatch';
+import { Minimatch } from 'minimatch';
+
+// minimatch() compiles the pattern on every call. A large tree tests the same
+// handful of rules against thousands of paths, so cache the compiled matchers.
+const compiledCache = new Map();
+const COMPILED_CACHE_MAX = 10000;
+
+function compiledMatch(filepath, pattern) {
+  let matcher = compiledCache.get(pattern);
+  if (!matcher) {
+    matcher = new Minimatch(pattern, { dot: true });
+    if (compiledCache.size >= COMPILED_CACHE_MAX) compiledCache.clear();
+    compiledCache.set(pattern, matcher);
+  }
+  return matcher.match(filepath);
+}
 
 export function parseGitignore(content) {
   return content
@@ -40,9 +55,9 @@ export function matchesPattern(filepath, pattern) {
   // nested routes/rss/ file disappear from push and diff.
   const candidates = anchored ? [body] : [body, '**/' + body];
   for (const candidate of candidates) {
-    if (minimatch(filepath, candidate, { dot: true })) return true;
+    if (compiledMatch(filepath, candidate)) return true;
     // Matching a directory implies its contents are ignored as well.
-    if (minimatch(filepath, candidate + '/**', { dot: true })) return true;
+    if (compiledMatch(filepath, candidate + '/**')) return true;
   }
   return false;
 }
