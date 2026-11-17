@@ -1,6 +1,6 @@
 {
   "name": "lansync",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "description": "Minimal LAN file sync tool with optional remote command execution",
   "type": "module",
   "bin": {
@@ -10,9 +10,9 @@
     "test": "node --test test/*.js"
   },
   "dependencies": {
-    "minimatch": "^9.0.0"
+    "minimatch": "11.0.9"
   },
   "engines": {
-    "node": ">=18.3.0"
+    "node": "20 || >=22"
   }
 }

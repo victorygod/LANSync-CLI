@@ -24,7 +24,7 @@ A minimal LAN file sync tool with optional remote command execution.
 
 ## Requirements
 
-- Node.js >= 18.3.0
+- Node.js 20 or >=22
 - npm
 
 ## Installation
