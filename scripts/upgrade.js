@@ -1307,7 +1307,8 @@ async function plan(opts) {
       `5. switch local lansync to ${pre.newVersion}`,
       '6. health check from the local lansync client',
       `7. update both lansyncopt installs to ${pre.newVersion}-opt`,
-      opts.keepControl ? '8. leave lansyncopt running' : '8. stop the remote lansyncopt daemon',
+      opts.stopControl ? '8. stop the remote lansyncopt daemon' : '8. leave lansyncopt running',
+      '9. (manual) commit on each machine; .git is not synced',
     ];
     if (jsonMode) {
       console.log(JSON.stringify({ ok: true, newVersion: pre.newVersion, control: pre.control, steps }, null, 2));
@@ -1444,6 +1445,12 @@ Safety:
   - Any failure after the switch restores app.bak-* automatically.
   - Interrupted runs are safe to re-run; rollback is always available.
   - Tokens are never printed or written to the report.
+
+Git:
+  lansync copies working-tree files only; .git is ignored. This script does
+  not commit. After an upgrade, commit on each machine separately -- the
+  remote commit is independent from the local one, and git history is never
+  transferred.
 
 Exit codes:
   0  success

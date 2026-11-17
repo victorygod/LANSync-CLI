@@ -78,6 +78,10 @@ node scripts/upgrade.js doctor
 node scripts/upgrade.js plan
 ```
 
+lansync copies working-tree files only (`.git` is ignored). The upgrade does
+not commit anything: commit separately on each machine. The remote commit is
+independent from the local one, and git history is never transferred.
+
 If the command exits non-zero, give your agent:
 
 ```text

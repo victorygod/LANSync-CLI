@@ -47,6 +47,13 @@ Internal steps (not meant to be driven by hand):
    the next upgrade; stop it explicitly with `--stop-control` or
    `node scripts/upgrade.js stop-control` (this preserves `server.json`).
 
+## Git
+
+lansync syncs working-tree files only; `.git` is ignored. The upgrade never
+commits. After an upgrade, run `git status` and commit on each machine
+separately. The two commits are independent and their hashes will differ;
+git history is not transferred.
+
 ## Exit codes
 
 | Code | Meaning | Production state |
