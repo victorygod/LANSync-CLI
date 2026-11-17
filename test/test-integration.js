@@ -197,6 +197,29 @@ describe('integration', () => {
     assert.ok(fs.existsSync(path.join(clientDir, 'src', 'index.js')));
   });
 
+  it('streams a large file in both directions without temp leftovers', async () => {
+    await runCli(['client', 'config', serverUrl], clientDir);
+
+    const size = 2 * 1024 * 1024;
+    const content = Buffer.alloc(size);
+    for (let i = 0; i < size; i++) content[i] = i % 251;
+    fs.writeFileSync(path.join(clientDir, 'big.bin'), content);
+
+    await runCli(['push', 'big.bin'], clientDir);
+    const serverFile = path.join(serverDir, 'big.bin');
+    assert.equal(fs.statSync(serverFile).size, size);
+    assert.deepStrictEqual(fs.readFileSync(serverFile), content);
+
+    fs.unlinkSync(path.join(clientDir, 'big.bin'));
+    await runCli(['pull', 'big.bin'], clientDir);
+    assert.deepStrictEqual(fs.readFileSync(path.join(clientDir, 'big.bin')), content);
+
+    for (const root of [clientDir, serverDir]) {
+      const leftovers = fs.readdirSync(root).filter(name => name.startsWith('.lansync-tmp-'));
+      assert.deepStrictEqual(leftovers, []);
+    }
+  });
+
   it('syncs files from client to server', async () => {
     // Configure client
     await runCli(['client', 'config', serverUrl.replace('http://', '')], clientDir);

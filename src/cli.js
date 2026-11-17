@@ -48,6 +48,27 @@ function exitSoon(code) {
   throw new ExitSignal(code);
 }
 
+// Optional TTY progress line. Transfers still reset their inactivity timer
+// internally; this is only the human-visible view.
+function makeProgress() {
+  if (!process.stderr.isTTY) return { update() {}, done() {} };
+  let last = 0;
+  let printed = false;
+  return {
+    update(state) {
+      const now = Date.now();
+      if (now - last < 200 && state.files < state.totalFiles) return;
+      last = now;
+      printed = true;
+      const mb = (state.bytes / 1048576).toFixed(1);
+      process.stderr.write(`\rTransferred ${state.files}/${state.totalFiles} files, ${mb} MB`);
+    },
+    done() {
+      if (printed) process.stderr.write('\n');
+    },
+  };
+}
+
 async function main() {
   if (args.length === 0) {
     printHelp();
@@ -374,7 +395,13 @@ async function handlePullCommand(options, patterns) {
 
   const noDelete = options['no-delete'];
 
-  const result = await pull({ serverUrl, workDir, currentDir, patterns, noDelete, token });
+  const progress = makeProgress();
+  let result;
+  try {
+    result = await pull({ serverUrl, workDir, currentDir, patterns, noDelete, token, onProgress: progress.update });
+  } finally {
+    progress.done();
+  }
 
   if (result.skipped.length > 0) {
     console.log('\n  Skipped (unchanged):');
@@ -447,7 +474,13 @@ async function handlePushCommand(options, patterns) {
 
   const noDelete = options['no-delete'];
 
-  const result = await push({ serverUrl, workDir, currentDir, patterns, noDelete, token });
+  const progress = makeProgress();
+  let result;
+  try {
+    result = await push({ serverUrl, workDir, currentDir, patterns, noDelete, token, onProgress: progress.update });
+  } finally {
+    progress.done();
+  }
 
   if (result.skipped.length > 0) {
     console.log('\n  Skipped (unchanged):');

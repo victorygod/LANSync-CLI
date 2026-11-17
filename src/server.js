@@ -7,6 +7,8 @@ import http from 'node:http';
 import net from 'node:net';
 import crypto from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
+import { pipeline } from 'node:stream/promises';
+import { Transform } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { readServerConfig, writeServerConfig, getConfigDir } from './config.js';
 import { parseGitignore, shouldIgnore } from './ignore.js';
@@ -42,6 +44,7 @@ const DEFAULT_IGNORE_RULES = [
   '.git',
   '.lansync',
   '.lansyncopt',
+  '.lansync-tmp-*',
   'node_modules',
   '.DS_Store',
   'Thumbs.db'
@@ -398,9 +401,21 @@ async function handleFileGet(url, rootDir, res) {
     return;
   }
 
-  const content = fs.readFileSync(absolutePath);
-  res.writeHead(200, { 'Content-Type': 'application/octet-stream' });
-  res.end(content);
+  const stat = fs.statSync(absolutePath);
+  res.writeHead(200, {
+    'Content-Type': 'application/octet-stream',
+    'Content-Length': stat.size
+  });
+  try {
+    await pipeline(fs.createReadStream(absolutePath), res);
+  } catch (err) {
+    if (!res.headersSent) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    } else if (!res.destroyed) {
+      res.destroy(err);
+    }
+  }
 }
 
 async function handleFilePost(req, rootDir, res) {
@@ -427,25 +442,54 @@ async function handleFilePost(req, rootDir, res) {
     return;
   }
 
-  const chunks = [];
-  for await (const chunk of req) chunks.push(chunk);
   const destination = sanitizePath(filePath, rootDir);
   if (!destination || destination !== absolutePath) {
     res.writeHead(403);
     res.end(JSON.stringify({ error: 'Invalid path' }));
     return;
   }
-  const content = Buffer.concat(chunks);
-  fs.mkdirSync(path.dirname(destination), { recursive: true });
-  fs.writeFileSync(absolutePath, content);
-  rememberHash(
-    absolutePath,
-    fs.statSync(absolutePath),
-    crypto.createHash('md5').update(content).digest('hex')
-  );
 
-  res.writeHead(200, { 'Content-Type': 'application/json' });
-  res.end(JSON.stringify({ success: true, path: filePath }));
+  fs.mkdirSync(path.dirname(destination), { recursive: true });
+  // Stream into a sibling temp file so a failed/aborted upload never leaves a
+  // truncated destination, and so the event loop is not blocked by a Buffer.
+  const tmpPath = path.join(
+    path.dirname(destination),
+    `.lansync-tmp-${crypto.randomBytes(8).toString('hex')}`
+  );
+  const hash = crypto.createHash('md5');
+  const hasher = new Transform({
+    transform(chunk, encoding, callback) {
+      hash.update(chunk);
+      callback(null, chunk);
+    }
+  });
+
+  try {
+    await pipeline(req, hasher, fs.createWriteStream(tmpPath));
+    const digest = hash.digest('hex');
+    try {
+      fs.renameSync(tmpPath, destination);
+    } catch (err) {
+      if (err.code === 'EEXIST' || err.code === 'EPERM') {
+        fs.rmSync(destination, { force: true });
+        fs.renameSync(tmpPath, destination);
+      } else {
+        throw err;
+      }
+    }
+    rememberHash(destination, fs.statSync(destination), digest);
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: true, path: filePath }));
+  } catch (err) {
+    try { fs.unlinkSync(tmpPath); } catch {}
+    if (!res.headersSent) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    } else if (!res.destroyed) {
+      res.destroy(err);
+    }
+  }
 }
 
 async function handleFileDelete(url, rootDir, res) {

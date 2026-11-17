@@ -155,6 +155,13 @@ describe('ignore rules', () => {
       assert.ok(shouldIgnore('node_modules/pkg/index.js', ['/node_modules/']));
       assert.ok(!shouldIgnore('a/node_modules/pkg/index.js', ['/node_modules/']));
     });
+
+    it('ignores transfer temp files at any depth', () => {
+      const rules = ['.lansync-tmp-*'];
+      assert.ok(shouldIgnore('.lansync-tmp-abc', rules));
+      assert.ok(shouldIgnore('a/b/.lansync-tmp-abc', rules));
+      assert.ok(!shouldIgnore('a/b/normal.txt', rules));
+    });
   });
 });
 

@@ -2,6 +2,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import http from 'node:http';
+import https from 'node:https';
+import { Readable, Transform } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { pruneEmptyDirs, resolveSyncPath } from './directories.js';
 import { shouldIgnore, parseGitignore } from './ignore.js';
 import { minimatch } from 'minimatch';
@@ -12,6 +16,10 @@ const TIMEOUT_MS = 10000;
 // timeout tight, but give listings and transfers their own budgets.
 const LIST_TIMEOUT_MS = positiveInt(process.env.LANSNC_LIST_TIMEOUT_MS) || 300000;
 const TRANSFER_TIMEOUT_MS = positiveInt(process.env.LANSNC_TRANSFER_TIMEOUT_MS) || 300000;
+// Streaming transfers use an inactivity budget (reset on every chunk), not a
+// total cap: a healthy large file can take longer than the budget end-to-end.
+const TRANSFER_IDLE_MS = TRANSFER_TIMEOUT_MS;
+const TRANSFER_CONCURRENCY = positiveInt(process.env.LANSNC_CONCURRENCY) || 4;
 const MAX_RETRIES = 2;
 
 function positiveInt(value) {
@@ -122,6 +130,163 @@ async function withRetry(fn, maxRetries = MAX_RETRIES) {
     }
   }
   throw lastError;
+}
+
+async function mapLimit(items, limit, fn) {
+  const results = new Array(items.length);
+  let index = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (true) {
+      const current = index++;
+      if (current >= items.length) return;
+      results[current] = await fn(items[current], current);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
+// Streaming upload: one request per file, but no whole-file Buffer and no
+// total-duration cap. req.setTimeout is an inactivity timer (reset by socket
+// activity), so a large file can finish as long as it keeps flowing.
+function uploadFileStream(serverUrl, filePath, localPath, token, options = {}) {
+  const idleMs = options.idleMs || TRANSFER_IDLE_MS;
+  const stat = fs.statSync(localPath);
+  const url = new URL('/api/file', serverUrl);
+  const transport = url.protocol === 'https:' ? https : http;
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let stream;
+    const finish = (fn, value) => {
+      if (settled) return;
+      settled = true;
+      try { stream?.destroy(); } catch {}
+      try { req.destroy(); } catch {}
+      fn(value);
+    };
+
+    const req = transport.request(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'X-Path': encodeURIComponent(filePath),
+        'Content-Type': 'application/octet-stream'
+      }
+    }, res => {
+      const chunks = [];
+      res.on('data', chunk => chunks.push(chunk));
+      res.on('end', () => {
+        const body = Buffer.concat(chunks).toString('utf8');
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          let parsed = {};
+          try { parsed = body ? JSON.parse(body) : {}; } catch {}
+          finish(resolve, parsed);
+        } else if (res.statusCode === 401) {
+          finish(reject, unauthorizedError());
+        } else {
+          finish(reject, new Error(
+            `Failed to upload "${filePath}": ${res.statusCode}${body ? ` - ${body}` : ''}`
+          ));
+        }
+      });
+      res.on('error', err => finish(reject, err));
+    });
+
+    req.setTimeout(idleMs, () => {
+      const err = new Error(`Upload stalled for ${idleMs}ms: ${filePath}`);
+      err.code = 'ETIMEDOUT';
+      req.destroy(err);
+    });
+    req.on('error', err => finish(reject, err));
+
+    stream = fs.createReadStream(localPath);
+    let sent = 0;
+    stream.on('data', chunk => {
+      sent += chunk.length;
+      req.setTimeout(idleMs);
+      options.onProgress?.({ path: filePath, bytes: sent, total: stat.size });
+    });
+    stream.on('error', err => req.destroy(err));
+    stream.pipe(req);
+  });
+}
+
+// Streaming download: inactivity timer resets on every chunk. Writes to a
+// sibling temp file and renames, so a failed pull never leaves a partial file.
+async function downloadFileTo(serverUrl, filePath, localPath, token, options = {}) {
+  const idleMs = options.idleMs || TRANSFER_IDLE_MS;
+  const url = new URL(`/api/file?path=${encodeURIComponent(filePath)}`, serverUrl);
+  const controller = new AbortController();
+  let stalled = false;
+  let timer;
+  const reset = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      stalled = true;
+      controller.abort();
+    }, idleMs);
+  };
+  reset();
+
+  let tmpPath = null;
+  try {
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: controller.signal
+    });
+    if (res.status === 404) return null;
+    if (res.status === 401) throw unauthorizedError();
+    if (!res.ok) {
+      let detail = '';
+      try { detail = await res.text(); } catch {}
+      throw new Error(`Failed to fetch "${filePath}": ${res.status}${detail ? ` - ${detail}` : ''}`);
+    }
+    if (!res.body) throw new Error(`Empty response body for "${filePath}"`);
+
+    fs.mkdirSync(path.dirname(localPath), { recursive: true });
+    tmpPath = path.join(
+      path.dirname(localPath),
+      `.lansync-tmp-${crypto.randomBytes(6).toString('hex')}-${path.basename(localPath)}`
+    );
+
+    let received = 0;
+    const counter = new Transform({
+      transform(chunk, encoding, callback) {
+        received += chunk.length;
+        reset();
+        options.onProgress?.({ path: filePath, bytes: received });
+        callback(null, chunk);
+      }
+    });
+
+    await pipeline(Readable.fromWeb(res.body), counter, fs.createWriteStream(tmpPath));
+
+    try {
+      fs.renameSync(tmpPath, localPath);
+    } catch (err) {
+      if (err.code === 'EEXIST' || err.code === 'EPERM') {
+        fs.rmSync(localPath, { force: true });
+        fs.renameSync(tmpPath, localPath);
+      } else {
+        throw err;
+      }
+    }
+    tmpPath = null;
+    return received;
+  } catch (err) {
+    if (stalled) {
+      const timeoutErr = new Error(`Download stalled for ${idleMs}ms: ${filePath}`);
+      timeoutErr.code = 'ETIMEDOUT';
+      throw timeoutErr;
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+    if (tmpPath) {
+      try { fs.unlinkSync(tmpPath); } catch {}
+    }
+  }
 }
 
 // Cheap handshake: /api/list walks and hashes the whole tree, so it is a bad
@@ -508,7 +673,7 @@ export function computePushPlan(localFiles, serverFiles, noDelete) {
   return { toUpload, toSkip, toDelete, keptCount };
 }
 
-const DEFAULT_IGNORE_RULES = ['.git', '.lansync', '.lansyncopt', 'node_modules', '.DS_Store', 'Thumbs.db'];
+const DEFAULT_IGNORE_RULES = ['.git', '.lansync', '.lansyncopt', '.lansync-tmp-*', 'node_modules', '.DS_Store', 'Thumbs.db'];
 
 function checkedLocalPath(root, name) {
   const resolved = resolveSyncPath(root, name);
@@ -569,7 +734,7 @@ function mapServerFiles(serverFiles, pathPrefix) {
   });
 }
 
-export async function pull({ serverUrl, workDir, currentDir, pattern, patterns = pattern == null ? [] : [pattern], noDelete, token }) {
+export async function pull({ serverUrl, workDir, currentDir, pattern, patterns = pattern == null ? [] : [pattern], noDelete, token, onProgress }) {
   const validation = validateWorkDir(currentDir, workDir);
   if (!validation.valid) {
     throw new Error(`${validation.error}\nCurrent directory: ${validation.currentDir}`);
@@ -603,23 +768,36 @@ export async function pull({ serverUrl, workDir, currentDir, pattern, patterns =
   // Compute plan
   const plan = computePullPlan(serverFiles, localFiles, effectiveNoDelete);
 
-  // Execute downloads with retry and error collection
-  const downloaded = [];
-  const failed = [];
-  for (const file of plan.toDownload) {
+  // Execute downloads with retry, bounded concurrency, and progress.
+  const totalFiles = plan.toDownload.length;
+  let completedFiles = 0;
+  let completedBytes = 0;
+  const report = size => {
+    completedFiles++;
+    completedBytes += size || 0;
+    onProgress?.({ files: completedFiles, totalFiles, bytes: completedBytes });
+  };
+
+  const outcomes = await mapLimit(plan.toDownload, TRANSFER_CONCURRENCY, async file => {
     try {
-      // Use serverPath for fetching (relative to rootDir)
-      const content = await withRetry(() => fetchFile(serverUrl, file.serverPath || file.path, token));
-      if (content === null) throw new Error('File disappeared from server during download');
-      // Use path for local saving (relative to currentDir)
+      // Use serverPath for fetching (relative to rootDir), path for local saving.
       const localPath = checkedLocalPath(currentDir, file.path);
-      fs.mkdirSync(path.dirname(localPath), { recursive: true });
-      fs.writeFileSync(localPath, Buffer.from(content));
-      downloaded.push(file.path);
+      const written = await withRetry(() =>
+        downloadFileTo(serverUrl, file.serverPath || file.path, localPath, token)
+      );
+      if (written === null) throw new Error('File disappeared from server during download');
+      report(file.size);
+      return { ok: true, path: file.path };
     } catch (err) {
-      failed.push({ path: file.path, error: err.message });
+      report(file.size);
+      return { ok: false, path: file.path, error: err.message };
     }
-  }
+  });
+
+  const downloaded = outcomes.filter(outcome => outcome.ok).map(outcome => outcome.path);
+  const failed = outcomes
+    .filter(outcome => !outcome.ok)
+    .map(outcome => ({ path: outcome.path, error: outcome.error }));
 
   // Execute deletes
   const deleted = [];
@@ -645,7 +823,7 @@ export async function pull({ serverUrl, workDir, currentDir, pattern, patterns =
   };
 }
 
-export async function push({ serverUrl, workDir, currentDir, pattern, patterns = pattern == null ? [] : [pattern], noDelete, token }) {
+export async function push({ serverUrl, workDir, currentDir, pattern, patterns = pattern == null ? [] : [pattern], noDelete, token, onProgress }) {
   const validation = validateWorkDir(currentDir, workDir);
   if (!validation.valid) {
     throw new Error(`${validation.error}\nCurrent directory: ${validation.currentDir}`);
@@ -687,19 +865,32 @@ export async function push({ serverUrl, workDir, currentDir, pattern, patterns =
     throw new Error('Update the server before deleting files in a subdirectory, or use --no-delete.');
   }
 
-  // Execute uploads with retry and error collection
-  const uploaded = [];
-  const failed = [];
-  for (const file of plan.toUpload) {
+  // Execute uploads with retry, bounded concurrency, and progress.
+  const totalFiles = plan.toUpload.length;
+  let completedFiles = 0;
+  let completedBytes = 0;
+  const report = size => {
+    completedFiles++;
+    completedBytes += size || 0;
+    onProgress?.({ files: completedFiles, totalFiles, bytes: completedBytes });
+  };
+
+  const outcomes = await mapLimit(plan.toUpload, TRANSFER_CONCURRENCY, async file => {
     try {
       const localPath = checkedLocalPath(currentDir, file.path);
-      const content = fs.readFileSync(localPath);
-      await withRetry(() => uploadFile(serverUrl, file.serverPath, content, token));
-      uploaded.push(file.path);
+      await withRetry(() => uploadFileStream(serverUrl, file.serverPath, localPath, token));
+      report(file.size);
+      return { ok: true, path: file.path };
     } catch (err) {
-      failed.push({ path: file.path, error: err.message });
+      report(file.size);
+      return { ok: false, path: file.path, error: err.message };
     }
-  }
+  });
+
+  const uploaded = outcomes.filter(outcome => outcome.ok).map(outcome => outcome.path);
+  const failed = outcomes
+    .filter(outcome => !outcome.ok)
+    .map(outcome => ({ path: outcome.path, error: outcome.error }));
 
   // Execute deletes
   const deleted = [];
