@@ -1159,7 +1159,16 @@ async function runUpgrade(opts) {
     log('running remote tests...');
     const tests = await agentCall(pre.control, 'test-repo');
     state.remoteTests = tests;
-    if (!tests.ok) throw fail(EXIT.remoteTests, 'remote tests failed');
+    if (!tests.ok) {
+      const failed = (tests.checks || [])
+        .filter(check => check.ok === false)
+        .map(check => {
+          const detail = (check.stderr || check.stdout || check.detail || '').trim();
+          return check.name + (detail ? `: ${tail(detail, 600)}` : '');
+        })
+        .join(' | ');
+      throw fail(EXIT.remoteTests, `remote tests failed${failed ? ': ' + failed : ''}`);
+    }
     state.checks.push({ name: 'remote tests', ok: true });
 
     state.phase = 'canary';
@@ -1507,7 +1516,9 @@ async function main() {
   if (argv[0] === 'agent') {
     const result = await agentMain(argv.slice(1));
     process.stdout.write(JSON.stringify(result) + '\n');
-    process.exitCode = result.ok === false ? 1 : 0;
+    // Always exit 0: the JSON payload carries ok/error so the driver can map
+    // failures to the right exit code instead of treating them as transport errors.
+    process.exitCode = 0;
     return;
   }
 

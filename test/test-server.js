@@ -196,6 +196,16 @@ describe('walkDir', () => {
     assert.ok(rootFile.size > 0);
     assert.ok(rootFile.mtime > 0);
   });
+
+  it('re-hashes when a file changes, even at the same size', () => {
+    const before = walkDir(tmpDir, tmpDir, []).find(f => f.path === 'root.txt').hash;
+    const file = path.join(tmpDir, 'root.txt');
+    fs.writeFileSync(file, 'ROOT'); // same length as 'root'
+    const future = new Date(Date.now() + 2000);
+    fs.utimesSync(file, future, future);
+    const after = walkDir(tmpDir, tmpDir, []).find(f => f.path === 'root.txt').hash;
+    assert.notStrictEqual(after, before);
+  });
 });
 
 describe('pruneEmptyDirs', () => {

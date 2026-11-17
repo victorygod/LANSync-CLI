@@ -81,6 +81,34 @@ export function getLocalIP() {
   return fallbackIPs[0] || '127.0.0.1';
 }
 
+// Cache file hashes by absolute path + (mtime, size). /api/list re-walks and
+// re-hashes the whole tree on every diff; without this, a 72MB / 7k-file repo
+// costs >10s per call even when nothing changed. POST/DELETE update or remove
+// entries immediately, so lansync's own writes never wait for mtime granularity.
+const HASH_CACHE_MAX = 100000;
+const hashCache = new Map();
+
+function rememberHash(fullPath, stat, hash) {
+  if (hashCache.size >= HASH_CACHE_MAX) hashCache.clear();
+  hashCache.set(path.resolve(fullPath), { mtimeMs: stat.mtimeMs, size: stat.size, hash });
+}
+
+function forgetHash(fullPath) {
+  hashCache.delete(path.resolve(fullPath));
+}
+
+function hashFile(fullPath, stat) {
+  const key = path.resolve(fullPath);
+  const cached = hashCache.get(key);
+  if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
+    return cached.hash;
+  }
+  const content = fs.readFileSync(fullPath);
+  const hash = crypto.createHash('md5').update(content).digest('hex');
+  rememberHash(key, stat, hash);
+  return hash;
+}
+
 export function walkDir(dir, baseDir, ignoreRules, directories = []) {
   const results = [];
 
@@ -98,8 +126,7 @@ export function walkDir(dir, baseDir, ignoreRules, directories = []) {
         walk(fullPath);
       } else if (entry.isFile()) {
         const stat = fs.statSync(fullPath);
-        const content = fs.readFileSync(fullPath);
-        const hash = crypto.createHash('md5').update(content).digest('hex');
+        const hash = hashFile(fullPath, stat);
         // wire 统一正斜杠:win32 上 path.relative 产出反斜杠,原样上线的话
         // POSIX client 会 join 出字面含 "\" 的扁平文件;"docs/file.txt" 在
         // Windows 端读取(以及 sanitizePath 的 path.resolve)同样有效
@@ -408,8 +435,14 @@ async function handleFilePost(req, rootDir, res) {
     res.end(JSON.stringify({ error: 'Invalid path' }));
     return;
   }
+  const content = Buffer.concat(chunks);
   fs.mkdirSync(path.dirname(destination), { recursive: true });
-  fs.writeFileSync(absolutePath, Buffer.concat(chunks));
+  fs.writeFileSync(absolutePath, content);
+  rememberHash(
+    absolutePath,
+    fs.statSync(absolutePath),
+    crypto.createHash('md5').update(content).digest('hex')
+  );
 
   res.writeHead(200, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify({ success: true, path: filePath }));
@@ -447,6 +480,7 @@ async function handleFileDelete(url, rootDir, res) {
   }
   const deletePath = path.resolve(rootDir, filePath);
   fs.unlinkSync(deletePath);
+  forgetHash(deletePath);
 
   // 删除成功后向上修剪空目录:本地删掉整个目录再 push 时,server 端不再
   // 残留空目录壳(协议只列文件,这些空壳对后续 push 永远不可见,会一直积累)

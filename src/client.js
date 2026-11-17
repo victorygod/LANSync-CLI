@@ -7,7 +7,17 @@ import { shouldIgnore, parseGitignore } from './ignore.js';
 import { minimatch } from 'minimatch';
 
 const TIMEOUT_MS = 10000;
+// Large trees take longer than small API calls: a 7k-file / 72MB tree can
+// take >10s to walk and hash on a cold Windows disk. Keep the small-call
+// timeout tight, but give listings and transfers their own budgets.
+const LIST_TIMEOUT_MS = positiveInt(process.env.LANSNC_LIST_TIMEOUT_MS) || 300000;
+const TRANSFER_TIMEOUT_MS = positiveInt(process.env.LANSNC_TRANSFER_TIMEOUT_MS) || 300000;
 const MAX_RETRIES = 2;
+
+function positiveInt(value) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
 
 // Normalize path separators to forward slashes for cross-platform comparison
 function normalizePath(p) {
@@ -25,9 +35,9 @@ function computeBufferHash(buffer) {
   return crypto.createHash('md5').update(buffer).digest('hex');
 }
 
-async function fetchWithTimeout(url, options = {}) {
+async function fetchWithTimeout(url, options = {}, timeoutMs = TIMEOUT_MS) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const response = await fetch(url, {
@@ -35,6 +45,10 @@ async function fetchWithTimeout(url, options = {}) {
       signal: controller.signal
     });
     return response;
+  } catch (err) {
+    // undici reports AbortError with code 20; keep the budget for the message.
+    if (err?.name === 'AbortError') err.timeoutMs = timeoutMs;
+    throw err;
   } finally {
     clearTimeout(timeout);
   }
@@ -44,7 +58,17 @@ async function fetchWithTimeout(url, options = {}) {
 // 真实原因藏在 err.cause(ECONNREFUSED/ENOTFOUND 等),不取出来用户就只看到一句 fetch failed。
 function describeFetchError(err, serverUrl) {
   const cause = err?.cause || {};
-  const code = cause.code || err.code || (err.name === 'AbortError' ? 'ETIMEDOUT' : '') || err.name;
+  const timedOut = err?.name === 'AbortError' || err?.code === 20;
+  if (timedOut) {
+    const budget = err.timeoutMs || TIMEOUT_MS;
+    const wrapped = new Error(
+      `Cannot reach ${serverUrl} (ETIMEDOUT): request timed out after ${budget}ms. ` +
+      'Large trees can raise the budget with LANSNC_LIST_TIMEOUT_MS / LANSNC_TRANSFER_TIMEOUT_MS.'
+    );
+    wrapped.code = 'ETIMEDOUT';
+    return wrapped;
+  }
+  const code = cause.code || err.code || err.name;
   const hints = {
     ENOTFOUND: 'host not found - check the address for typos (see lansync client status)',
     ECONNREFUSED: 'connection refused - server not running or wrong port',
@@ -60,13 +84,13 @@ function describeFetchError(err, serverUrl) {
 }
 
 // 统一的网络请求封装:超时 + Bearer token + 网络错误翻译
-async function apiFetch(url, { token, ...options } = {}) {
+async function apiFetch(url, { token, timeoutMs, ...options } = {}) {
   const headers = { ...options.headers };
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
   try {
-    return await fetchWithTimeout(url, { ...options, headers });
+    return await fetchWithTimeout(url, { ...options, headers }, timeoutMs);
   } catch (err) {
     throw describeFetchError(err, new URL(url).origin);
   }
@@ -100,15 +124,27 @@ async function withRetry(fn, maxRetries = MAX_RETRIES) {
   throw lastError;
 }
 
-// 探活:网络失败/401 直接抛带 cause 的可操作错误(不再返回 bool)
-export async function checkServerReachable(serverUrl, token) {
-  const res = await apiFetch(`${serverUrl}/api/list?path=`, { token });
+// Cheap handshake: /api/list walks and hashes the whole tree, so it is a bad
+// reachability probe on large repos. A 404 means an older server (or a test
+// double) without /api/auth; it is still reachable, so let the real request
+// decide. 401 and network errors are actionable immediately.
+async function handshake(serverUrl, token) {
+  const res = await apiFetch(`${serverUrl}/api/auth`, { token });
   if (res.status === 401) {
     throw unauthorizedError();
+  }
+  if (res.status === 404) {
+    return false;
   }
   if (!res.ok) {
     throw new Error(`Server responded ${res.status} at ${serverUrl}`);
   }
+  return true;
+}
+
+// 探活:网络失败/401 直接抛带 cause 的可操作错误(不再返回 bool)
+export async function checkServerReachable(serverUrl, token) {
+  await handshake(serverUrl, token);
   return true;
 }
 
@@ -126,8 +162,13 @@ export async function verifyAuth(serverUrl, token) {
 }
 
 export async function fetchFileList(serverUrl, pathPrefix, token) {
+  // Cheap handshake first: it separates "unreachable / bad token" (fail fast)
+  // from "reachable but hashing a large tree" (let it finish). A handshake
+  // cannot prove progress, so the listing still keeps a generous upper bound.
+  await handshake(serverUrl, token);
+
   const url = `${serverUrl}/api/list?path=${encodeURIComponent(pathPrefix)}`;
-  const res = await apiFetch(url, { token });
+  const res = await apiFetch(url, { token, timeoutMs: LIST_TIMEOUT_MS });
 
   if (!res.ok) {
     if (res.status === 401) {
@@ -146,7 +187,7 @@ export async function fetchFileList(serverUrl, pathPrefix, token) {
 
 export async function fetchFile(serverUrl, filePath, token) {
   const url = `${serverUrl}/api/file?path=${encodeURIComponent(filePath)}`;
-  const res = await apiFetch(url, { token });
+  const res = await apiFetch(url, { token, timeoutMs: TRANSFER_TIMEOUT_MS });
 
   if (!res.ok) {
     if (res.status === 404) {
@@ -173,6 +214,7 @@ export async function uploadFile(serverUrl, filePath, content, token) {
   const url = `${serverUrl}/api/file`;
   const res = await apiFetch(url, {
     token,
+    timeoutMs: TRANSFER_TIMEOUT_MS,
     method: 'POST',
     headers: {
       'X-Path': encodeURIComponent(filePath)

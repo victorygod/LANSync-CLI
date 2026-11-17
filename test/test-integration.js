@@ -87,7 +87,7 @@ describe('integration', () => {
     fs.mkdirSync(path.join(clientDir, 'keep.empty'));
     fs.mkdirSync(path.join(serverDir, 'remote.empty'));
     const bad = await runCliCapture(['push', 'xxx1', 'typo'], clientDir);
-    assert.equal(bad.code, 1);
+    assert.equal(bad.code, 1, bad.stderr || bad.stdout);
     assert.match(bad.stderr, /typo/);
     assert.ok(!fs.existsSync(path.join(serverDir, 'xxx1')));
     await runCli(['push', 'xxx1', 'xxx2', 'xxx*'], clientDir);
@@ -130,7 +130,7 @@ describe('integration', () => {
     await runCli(['pull'], path.join(clientDir, 'src'));
     assert.equal(fs.readFileSync(ignored, 'utf8'), 'keep');
     const missing = await runCliCapture(['diff', 'generated/'], path.join(clientDir, 'src'));
-    assert.equal(missing.code, 2);
+    assert.equal(missing.code, 2, missing.stderr || missing.stdout);
   });
 
   it('does not let a root-anchored ignore rule hide nested directories on push', async () => {

@@ -23,10 +23,35 @@ try {
   ).version;
 } catch {}
 
+// Windows + undici: calling process.exit() while a socket is in
+// UV_HANDLE_CLOSING trips a libuv assertion (win/async.c). Set the exit code
+// and let the event loop close sockets; the unref'd timer only fires if
+// keep-alive handles would otherwise keep the CLI alive.
+class ExitSignal extends Error {
+  constructor(code) {
+    super(`exit ${code}`);
+    this.name = 'ExitSignal';
+    this.exitCode = code;
+  }
+}
+
+function scheduleExit(code) {
+  process.exitCode = code;
+  const timer = setTimeout(() => process.exit(code), 50);
+  timer.unref();
+}
+
+// Preserve process.exit()'s "stop here" semantics: throwing unwinds the
+// handler instead of letting it continue with missing config/paths.
+function exitSoon(code) {
+  scheduleExit(code);
+  throw new ExitSignal(code);
+}
+
 async function main() {
   if (args.length === 0) {
     printHelp();
-    process.exit(0);
+    return;
   }
 
   const command = args[0];
@@ -93,13 +118,14 @@ async function main() {
       default:
         console.error(`Unknown command: ${command}`);
         printHelp();
-        process.exit(1);
+        exitSoon(1);
     }
   } catch (err) {
+    if (err instanceof ExitSignal) return;
     const optionEnd = args.indexOf('--');
     const json = command === 'diff' && args.slice(1, optionEnd < 0 ? args.length : optionEnd).includes('--json');
     console.error(json ? JSON.stringify({ error: err.message }) : `Error: ${err.message}`);
-    process.exit(command === 'diff' ? 2 : 1);
+    scheduleExit(command === 'diff' ? 2 : 1);
   }
 }
 
@@ -136,6 +162,8 @@ Agent usage:
   Agents normally drive the client side. Connect first via 'client config <ip:port>'
   (verifies the password against the server), then confirm with 'client status'.
   Tip: set LANSNC_PASSWORD to skip interactive password prompts in scripts.
+  Large repos: small calls use 10s; listings/transfers default to 300s and can
+  be overridden with LANSNC_LIST_TIMEOUT_MS / LANSNC_TRANSFER_TIMEOUT_MS.
 
   1. Sync with pull/push, never as exec side effects. Each pull/push transfers
      diffs and lists changed files, so a call doubles as a diff check.
@@ -167,13 +195,13 @@ async function handleServerCommand(subCommand, options) {
       const policy = resolvePolicy(execArg);
       if (!policy) {
         console.error(`Invalid exec mode: ${execArg}. Valid: ${EXEC_POLICIES.join(', ')}`);
-        process.exit(1);
+        exitSoon(1);
       }
       // 密码始终必填:所有 /api/*(含 pull/push)都要求 token,与 --exec 取值无关
       const password = await promptPassword('Enter cli password: ');
       if (!password || !password.trim()) {
         console.error('Password is required (set LANSNC_PASSWORD or enter interactively).');
-        process.exit(1);
+        exitSoon(1);
       }
       const token = deriveToken(password);
       const result = await startServerDaemon(rootDir, port, token, policy);
@@ -227,7 +255,7 @@ async function handleServerCommand(subCommand, options) {
           : `Killed PID ${ownerPid}. Port ${port} is free.`);
       } else {
         console.error(`Failed to kill PID ${ownerPid}. Kill it manually: taskkill /PID ${ownerPid} /F (Windows) or kill -9 ${ownerPid}.`);
-        process.exit(1);
+        exitSoon(1);
       }
       break;
     }
@@ -245,7 +273,7 @@ async function handleServerCommand(subCommand, options) {
     }
     default:
       console.error(`Unknown server command: ${subCommand}`);
-      process.exit(1);
+      exitSoon(1);
   }
 }
 
@@ -256,7 +284,7 @@ async function handleClientCommand(subCommand, paths) {
       const serverAddr = paths[0];
       if (!serverAddr) {
         console.error('Usage: lansync client config <ip:port>');
-        process.exit(1);
+        exitSoon(1);
       }
 
       // 地址基本校验:拦住 192.168.71,239(逗号当点)这类手滑,顺便归一化成 origin
@@ -265,11 +293,11 @@ async function handleClientCommand(subCommand, paths) {
         url = new URL(serverAddr.startsWith('http') ? serverAddr : `http://${serverAddr}`);
       } catch {
         console.error(`Invalid server address: ${serverAddr}`);
-        process.exit(1);
+        exitSoon(1);
       }
       if (!url.hostname || url.hostname.includes(',') || url.hostname.includes(' ')) {
         console.error(`Invalid server address: ${serverAddr} (hostname: "${url.hostname}")`);
-        process.exit(1);
+        exitSoon(1);
       }
       const serverUrl = url.origin;
       const workDir = process.cwd();
@@ -277,7 +305,7 @@ async function handleClientCommand(subCommand, paths) {
       const password = await promptPassword('Enter cli password: ');
       if (!password || !password.trim()) {
         console.error('Password is required (set LANSNC_PASSWORD or enter interactively).');
-        process.exit(1);
+        exitSoon(1);
       }
       const token = deriveToken(password);
 
@@ -316,7 +344,7 @@ async function handleClientCommand(subCommand, paths) {
     }
     default:
       console.error(`Unknown client command: ${subCommand}`);
-      process.exit(1);
+      exitSoon(1);
   }
 }
 
@@ -324,13 +352,13 @@ async function handlePullCommand(options, patterns) {
   const config = readClientConfig();
   if (!config) {
     console.error('Client not configured. Run: lansync client config <ip:port>');
-    process.exit(1);
+    exitSoon(1);
   }
 
   const { serverUrl, workDir, token } = config;
   if (!token) {
     console.error('Client has no password. Re-run: lansync client config <ip:port>');
-    process.exit(1);
+    exitSoon(1);
   }
   const currentDir = process.cwd();
 
@@ -397,13 +425,13 @@ async function handlePushCommand(options, patterns) {
   const config = readClientConfig();
   if (!config) {
     console.error('Client not configured. Run: lansync client config <ip:port>');
-    process.exit(1);
+    exitSoon(1);
   }
 
   const { serverUrl, workDir, token } = config;
   if (!token) {
     console.error('Client has no password. Re-run: lansync client config <ip:port>');
-    process.exit(1);
+    exitSoon(1);
   }
   const currentDir = process.cwd();
 
@@ -473,7 +501,7 @@ async function handleDiffCommand(options, patterns) {
   // 区分:agent 用 $? 即可判定同步状态,无需解析文本
   const fail = (message) => {
     console.error(json ? JSON.stringify({ error: message }) : `Error: ${message}`);
-    process.exit(2);
+    exitSoon(2);
   };
 
   const config = readClientConfig();
@@ -532,11 +560,11 @@ async function handleExecCommand(options, patterns) {
   const config = readClientConfig();
   if (!config) {
     console.error('Client not configured. Run: lansync client config <ip:port>');
-    process.exit(1);
+    exitSoon(1);
   }
   if (!config.token) {
     console.error('Client has no password. Re-run: lansync client config <ip:port>');
-    process.exit(1);
+    exitSoon(1);
   }
 
   const { serverUrl, token } = config;
@@ -544,7 +572,7 @@ async function handleExecCommand(options, patterns) {
   const command = patterns[0];
   if (!command) {
     console.error('Usage: lansync exec [--json] "<command>"');
-    process.exit(1);
+    exitSoon(1);
   }
 
   const result = await execRemote(serverUrl, token, command);
@@ -594,4 +622,8 @@ function promptPassword(promptText) {
   });
 }
 
-main();
+main().catch(err => {
+  if (err instanceof ExitSignal) return;
+  console.error(err?.stack || String(err));
+  scheduleExit(1);
+});

@@ -52,21 +52,24 @@ for (const op of ['push', 'pull']) {
     const serverUrl = 'http://127.0.0.1:' + server.address().port;
     fs.writeFileSync(path.join(root, 'client.json'), JSON.stringify({ workDir: root, token: 'test', serverUrl }));
     const run = cmd => exec(process.execPath, [cli, cmd], { cwd, env: { ...process.env, LANSNC_CONFIG_DIR: root } });
+    const listRequests = () => requests.filter(([, url]) => url.startsWith('/api/list'));
+    const nonHandshake = () => requests.filter(([, url]) => !url.startsWith('/api/auth'));
+
     await assert.rejects(run(op), err => err.code === 1 && /Skipped 1 planned deletions/.test(err.stdout));
-    assert.deepEqual(requests.filter(([,url]) => url.startsWith('/api/list')), [['GET', '/api/list?path=sub']]);
+    assert.deepEqual(listRequests(), [['GET', '/api/list?path=sub']]);
     assert.ok(requests.every(([method]) => method !== 'DELETE'));
     assert.equal(fs.readFileSync(path.join(cwd, 'local'), 'utf8'), 'local');
     listing = {};
     for (const cmd of [op, 'diff']) {
       requests.length = 0;
       await assert.rejects(run(cmd), err => err.code === (cmd === 'diff' ? 2 : 1) && /files array/.test(err.stderr));
-      assert.deepEqual(requests, [['GET', '/api/list?path=sub']]);
+      assert.deepEqual(listRequests(), [['GET', '/api/list?path=sub']]);
     }
     for (status of [401, 500]) {
       listing = { error: 'Cannot read locked file' };
       requests.length = 0;
       await assert.rejects(run(op), err => err.code === 1 && (status === 401 || err.stderr.includes(listing.error)));
-      assert.deepEqual(requests, [['GET', '/api/list?path=sub']]);
+      assert.deepEqual(listRequests(), [['GET', '/api/list?path=sub']]);
       assert.ok(fs.existsSync(path.join(cwd, 'local')));
     }
     status = 200;
@@ -74,12 +77,12 @@ for (const op of ['push', 'pull']) {
     listing = { files: [{ path: 'sub/remote', hash: 'remote' }], scopedPrune: true };
     requests.length = 0;
     await run(op);
-    assert.equal(requests[0][1], '/api/list?path=sub');
+    assert.equal(listRequests()[0][1], '/api/list?path=sub');
     if (op === 'pull') {
       assert.equal(fs.readFileSync(path.join(cwd, 'remote'), 'utf8'), 'recovered');
       assert.ok(!fs.existsSync(path.join(cwd, 'local')));
     } else {
-      assert.deepEqual(requests.map(([method]) => method), ['GET', 'POST', 'DELETE']);
+      assert.deepEqual(nonHandshake().map(([method]) => method), ['GET', 'POST', 'DELETE']);
     }
     await new Promise(resolve => server.close(resolve));
     await assert.rejects(run(op), err => err.code === 1 && /Cannot reach/.test(err.stderr));

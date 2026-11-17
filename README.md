@@ -152,6 +152,10 @@ lansync syncs working-tree files only; `.git` is ignored. Commit locally
 before syncing, and commit on the far side after a push. The two commits are
 independent and git history is never transferred.
 
+Small API calls time out after 10s. File listings and transfers default to a
+300s budget (large trees can take >10s to walk and hash); override them with
+`LANSNC_LIST_TIMEOUT_MS` and `LANSNC_TRANSFER_TIMEOUT_MS`.
+
 ### Authentication
 
 All `/api/*` endpoints (pull/push/exec alike) require a Bearer token derived
